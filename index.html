@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b3a4b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Cocción Hammurabier</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1c2127;--mut:#68737d;--line:#dde2e8;--pri:#1b3a4b;--pri2:#2f5f78;--ok:#1e8e5a;--okbg:#e6f6ee;--warn:#b7791f;--warnbg:#fff6e5;--bad:#c0392b;--badbg:#fdecea;--crit:#8e2b1e}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--pri2);border-color:var(--pri2)}
+textarea{min-height:64px;resize:vertical}
+header{position:sticky;top:0;z-index:20;background:var(--pri);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+header h1{font-size:17px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header button{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:8px;padding:8px 12px}
+header button:active{background:rgba(255,255,255,.3)}
+#estado{font-size:12px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.18);white-space:nowrap}
+#estado.off{background:var(--warn)}
+#estado.pend{background:var(--warn)}
+#estado.err{background:var(--bad)}
+main{max-width:860px;margin:0 auto;padding:12px 12px 90px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.btn{display:inline-block;background:var(--pri);color:#fff;border:0;border-radius:10px;padding:12px 16px;font-weight:600}
+.btn.sec{background:#fff;color:var(--pri);border:1px solid var(--pri)}
+.btn.ok{background:var(--ok)}
+.btn.warn{background:var(--warn)}
+.btn.bad{background:var(--bad)}
+.btn.sm{padding:8px 12px;font-size:14px;font-weight:500}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grow{flex:1}
+.mut{color:var(--mut);font-size:14px}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:#e9edf1;color:var(--mut);font-weight:600}
+.tag.ab{background:var(--okbg);color:var(--ok)}
+.tag.ce{background:#e9edf1;color:var(--mut)}
+/* lista de lotes */
+.lote-item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff;margin-bottom:8px;cursor:pointer}
+.lote-item:active{background:#f0f3f6}
+.lote-item .n{font-weight:700}
+/* formulario */
+.form{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:640px){.form{grid-template-columns:1fr 1fr}.form .full{grid-column:1/-1}}
+.field label{display:block;font-size:13px;color:var(--mut);margin-bottom:4px;font-weight:600}
+.field .hint{font-size:12px;color:var(--mut);margin-top:3px}
+.req label::after{content:" *";color:var(--bad)}
+/* checklist */
+.prog{height:8px;background:#e3e8ee;border-radius:99px;overflow:hidden;margin-top:8px}
+.prog i{display:block;height:100%;background:var(--ok);width:0}
+.sec{margin-bottom:10px;border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.sec>h2{margin:0;padding:12px 14px;font-size:15px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;background:#f8fafc}
+.sec>h2 .cnt{margin-left:auto;font-size:13px;color:var(--mut);font-weight:500}
+.sec>h2 .chev{transition:transform .15s}
+.sec.open>h2 .chev{transform:rotate(90deg)}
+.sec.done>h2{background:var(--okbg)}
+.sec .body{display:none}
+.sec.open .body{display:block}
+.paso{padding:12px 14px;border-top:1px solid var(--line)}
+.paso.done{background:#f6fbf8}
+.paso.crit{border-left:4px solid var(--crit)}
+.paso .top{display:flex;gap:10px;align-items:flex-start}
+.paso .id{font-weight:700;color:var(--pri2);font-variant-numeric:tabular-nums;min-width:58px}
+.paso .txt{flex:1}
+.paso.done .txt{color:#3d4852}
+.paso .h{margin-top:6px;font-size:13px;color:var(--pri2);background:#eef4f8;padding:6px 8px;border-radius:8px}
+.paso .campos{display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px}
+@media(min-width:520px){.paso .campos{grid-template-columns:1fr 1fr}}
+.paso .campos label{display:block;font-size:12px;color:var(--mut);margin-bottom:2px}
+.paso .acc{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.paso .meta{font-size:13px;color:var(--ok);font-weight:600}
+.paso .meta.pend{color:var(--warn)}
+.paso .nota{margin-top:8px}
+.paso .vals{margin-top:6px;font-size:14px;color:#2e3a45}
+.paso .vals b{font-weight:600}
+.resumen{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.resumen div{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.resumen small{display:block;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+.resumen span{font-weight:700;font-size:16px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw}
+.toast.bad{background:var(--bad)}
+.hidden{display:none!important}
+.foot{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;justify-content:center;z-index:15}
+.foot .btn{flex:1;max-width:280px}
+</style>
+</head>
+<body>
+<header>
+  <button id="btnBack" class="hidden" onclick="irLista()">‹ Lotes</button>
+  <h1 id="titulo">Cocción Hammurabier</h1>
+  <span id="estado">·</span>
+  <button id="btnSync" onclick="sincronizar(true)" title="Sincronizar">↻</button>
+</header>
+<main>
+  <!-- LISTA -->
+  <section id="vLista">
+    <div class="row" style="margin-bottom:10px">
+      <div class="grow"><span class="mut">Operador:</span> <b id="opNombre">—</b> <button class="btn sm sec" onclick="pedirOperador(true)">cambiar</button></div>
+      <button class="btn" onclick="irNuevo()">+ Nuevo lote</button>
+    </div>
+    <div id="listaLotes"></div>
+    <p class="mut hidden" id="listaVacia">Sin lotes. Creá el primero.</p>
+    <p class="mut" style="font-size:12px;margin-top:20px">Procedimiento <span id="procVer"></span> · App <span id="appVer"></span></p>
+  </section>
+  <!-- NUEVO / EDITAR LOTE -->
+  <section id="vNuevo" class="hidden">
+    <div class="card">
+      <h2 style="margin:0 0 10px;font-size:17px" id="nuevoTit">Nuevo lote</h2>
+      <div class="form" id="formReceta"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" onclick="guardarLote()">Guardar lote</button>
+        <button class="btn sec" onclick="cancelarNuevo()">Cancelar</button>
+      </div>
+    </div>
+  </section>
+  <!-- LOTE / CHECKLIST -->
+  <section id="vLote" class="hidden">
+    <div class="card" id="loteCab"></div>
+    <div class="card"><h3 style="margin:0 0 8px;font-size:14px;color:var(--mut)">DATOS CLAVE</h3><div class="resumen" id="resumen"></div></div>
+    <div id="secciones"></div>
+    <div class="card">
+      <div class="row">
+        <button class="btn sec" onclick="editarReceta()">Editar receta</button>
+        <button class="btn sec" onclick="verReceta()">Ver receta</button>
+        <button class="btn warn" id="btnCerrar" onclick="cerrarLote()">Cerrar lote</button>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+// ===== PASOS — Procedimiento General de Cocción Hammurabier v4 (2026-09-03) =====
+// Cada paso: id, s (sección), t (texto), c (campos de datos, opcional), h (hint con {{clave_receta}}, opcional), k (crítico)
+// Tipos de campo: num, txt, sel (op: opciones), hora
+var PROC_VERSION = 'v4 · 2026-09-03';
+var SECCIONES = [
+  { id:'1',    n:'1. Día previo' },
+  { id:'2.1',  n:'2.1 Inicio del día' },
+  { id:'2.2',  n:'2.2 Agua del HLT' },
+  { id:'2.3',  n:'2.3 Molienda' },
+  { id:'2.4',  n:'2.4 Desinfección pre-cocción' },
+  { id:'2.5',  n:'2.5 Preparación mash-in' },
+  { id:'2.6',  n:'2.6 Mezcla y maceración' },
+  { id:'2.7',  n:'2.7 Vorlauf, sparge y recolección' },
+  { id:'2.8',  n:'2.8 Hervor' },
+  { id:'2.9',  n:'2.9 Whirlpool y decantación' },
+  { id:'2.10', n:'2.10 Transferencia al fermentador' },
+  { id:'2.11', n:'2.11 Limpieza' }
+];
+var PASOS = [
+  // ---------- 1. Día previo ----------
+  { id:'1.1', s:'1', t:'Verificar en fábrica maltas, lúpulos, levaduras, sales, enzimas y demás ingredientes.' },
+  { id:'1.2', s:'1', t:'Llenar el HLT con el agua total de cocción de la receta + 600 L de enjuague (sin tratamiento), medidos a temperatura ambiente.',
+    h:'Receta: {{agua_total}} L + 600 L = {{agua_hlt}} L', c:[{k:'vol_hlt', l:'Volumen cargado (L)', t:'num'}] },
+  { id:'1.3', s:'1', t:'Llevar el HLT a la temperatura de maceración sin sobrecalentar. F15 y F16 abiertas, bomba HLT 50 Hz en recirculación. Confirmar que llegó antes de cerrar el día.',
+    h:'T° mash receta: {{t_mash}} °C', c:[{k:'t_hlt', l:'T° HLT al cierre (°C)', t:'num'}] },
+  { id:'1.4', s:'1', t:'Cargar el CLT y enfriarlo durante la noche hasta la temperatura del día: 12 °C ales / 8 °C lagers (o la de la receta). No se baja en la mañana. 1600 L para 1000–1200 L ADH; 1200 L para 800 L ADH.',
+    h:'Target CLT: {{t_clt}} °C · Volumen: {{vol_clt}} L', c:[{k:'vol_clt', l:'Volumen CLT (L)', t:'num'},{k:'t_clt_set', l:'Setpoint CLT (°C)', t:'num'}] },
+  { id:'1.5', s:'1', t:'Verificar detergentes y desinfectantes.' },
+  { id:'1.6', s:'1', t:'Imprimir receta del día, tablas operativas de lauterado y checklist de adiciones.' },
+  // ---------- 2.1 Inicio del día ----------
+  { id:'2.1.1', s:'2.1', t:'Reiniciar los medidores de flujo del PLC.' },
+  { id:'2.1.2', s:'2.1', t:'Verificar que el CLT llegó durante la noche a la temperatura del día. No se baja el CLT en la mañana. Si no llegó, corregir antes de continuar y registrar la desviación.',
+    h:'Target CLT: {{t_clt}} °C', c:[{k:'t_clt', l:'T° CLT medida (°C)', t:'num'},{k:'desv', l:'Desviación / acción', t:'txt'}] },
+  { id:'2.1.3', s:'2.1', t:'Preenjuague de macerador, hervidor y tubería entre ambos con los 600 L de agua caliente del HLT (sin tratar). Drenar por el desagüe designado.' },
+  // ---------- 2.2 Agua del HLT ----------
+  { id:'2.2.1', s:'2.2', t:'Abrir válvulas F15 y F16.' },
+  { id:'2.2.2', s:'2.2', t:'Mantener el HLT en recirculación con la bomba a 50 Hz.' },
+  { id:'2.2.3', s:'2.2', t:'Preparar las sales según receta y disolverlas en una jarra de 4 L con agua de proceso.', h:'Sales: {{sales}}' },
+  { id:'2.2.4', s:'2.2', t:'Incorporar la solución de sales por la parte superior del HLT.' },
+  { id:'2.2.5', s:'2.2', t:'Preparar el ácido ascórbico según receta, disolverlo e incorporarlo al HLT.', h:'Ascórbico: {{ascorbico}}', c:[{k:'asc', l:'Ascórbico dosificado (g)', t:'num'}] },
+  { id:'2.2.6', s:'2.2', t:'Verificar que las válvulas de gas estén abiertas.' },
+  { id:'2.2.7', s:'2.2', t:'Llevar el HLT a T° de maceración + 6 °C (la inercia del macerador frío y el grano consume ~6.5 °C).', h:'{{t_mash}} + 6 = {{t_hlt_set}} °C', c:[{k:'t_hlt', l:'T° HLT alcanzada (°C)', t:'num'}] },
+  { id:'2.2.8', s:'2.2', t:'Configurar el quemador del HLT en automático en el PLC a la temperatura de 2.2.7.' },
+  // ---------- 2.3 Molienda ----------
+  { id:'2.3.1', s:'2.3', t:'Verificar que la tolva de mezcla esté colocada.' },
+  { id:'2.3.2', s:'2.3', t:'Asegurar que la cuchilla de cierre esté puesta.' },
+  { id:'2.3.3', s:'2.3', t:'Confirmar cerrada la válvula de entrada de mezcla al macerador.' },
+  { id:'2.3.4', s:'2.3', t:'Encender el tablero eléctrico si está apagado.' },
+  { id:'2.3.5', s:'2.3', t:'Verificar limpieza del molino y de su tolva.' },
+  { id:'2.3.6', s:'2.3', t:'Ajustar el giro del molino a 40 Hz.' },
+  { id:'2.3.7', s:'2.3', t:'Operar el transporte helicoidal a velocidad fija con RUN/STOP del variador.' },
+  { id:'2.3.8', s:'2.3', t:'Separación de rodillos 1.0–1.2 mm (perillas en 1.3) salvo que la receta indique otra. Inspección visual de la molienda.', h:'Receta: {{molienda}}', c:[{k:'mm', l:'Separación (mm)', t:'num', st:0.1},{k:'obs', l:'Observación molienda', t:'txt'}] },
+  { id:'2.3.9', s:'2.3', t:'Moler: (1) un saco de malta base, (2) maltas especiales, (3) resto de base, salvo otra secuencia en receta.', h:'Grist: {{grist}}', c:[{k:'kg', l:'Total molido (kg)', t:'num', st:0.1}] },
+  // ---------- 2.4 Desinfección ----------
+  { id:'2.4.1', s:'2.4', t:'Cargar 100 L de agua fría en el hervidor.' },
+  { id:'2.4.2', s:'2.4', t:'Agregar 350 mL de peracético ASPEP 50 al hervidor.' },
+  { id:'2.4.3', s:'2.4', t:'Recircular 5 minutos por whirlpool.' },
+  { id:'2.4.4', s:'2.4', t:'Pasar la solución por el intercambiador al fermentador.', h:'Fermentador: {{fv}}' },
+  { id:'2.4.5', s:'2.4', t:'En el fermentador, iniciar el ciclo CIP.' },
+  { id:'2.4.6', s:'2.4', t:'Olla de 30 L a hervir; al hervir apagar y sumergir la piedra de carbonatación 20 min.' },
+  { id:'2.4.7', s:'2.4', t:'Sumergir la piedra en la solución de peracético 10 min.' },
+  { id:'2.4.8', s:'2.4', t:'Introducir la piedra de carbonatación al fermentador.' },
+  // ---------- 2.5 Preparación mash-in ----------
+  { id:'2.5.1', s:'2.5', t:'Apagar la recirculación del HLT.' },
+  { id:'2.5.2', s:'2.5', t:'Verificar todas las válvulas del macerador cerradas y macerador bien drenado.' },
+  { id:'2.5.3', s:'2.5', t:'Rake a 40 Hz en reversa en posición de espera (giro continuo).' },
+  { id:'2.5.4', s:'2.5', t:'Bomba del HLT en automático para 0,1 m³.' },
+  { id:'2.5.5', s:'2.5', t:'Abrir F10, F16 y Sparge manual.' },
+  { id:'2.5.6', s:'2.5', t:'Enviar 100 L de precalentamiento con la bomba del HLT a 50 Hz.' },
+  { id:'2.5.7', s:'2.5', t:'Mantener el agua de precalentamiento 10 min y drenar por F06.' },
+  { id:'2.5.8', s:'2.5', t:'Preparar el ácido fosfórico de la fracción de maceración según receta, diluido en 3 L de agua de proceso.', h:'Fosfórico mash: {{fosforico_mash}}', c:[{k:'ml', l:'Fosfórico mash (mL)', t:'num'}] },
+  { id:'2.5.9', s:'2.5', t:'Verificar cerradas todas las válvulas y la puerta del macerador, especialmente F06.', k:1 },
+  { id:'2.5.10', s:'2.5', t:'Bomba del HLT en automático a 50 Hz.' },
+  { id:'2.5.11', s:'2.5', t:'Abrir F16, F10 y Sparge manual.' },
+  { id:'2.5.12', s:'2.5', t:'Cargar 100 L de agua de fundación.' },
+  // ---------- 2.6 Mezcla y maceración ----------
+  { id:'2.6.1', s:'2.6', t:'Rake a 40 Hz en reversa antes de iniciar el pase del agua.' },
+  { id:'2.6.2', s:'2.6', t:'Abrir la válvula manual de entrada de mezcla al macerador.' },
+  { id:'2.6.3', s:'2.6', t:'Abrir válvula F01.' },
+  { id:'2.6.4', s:'2.6', t:'Configurar el pase automático del resto del agua de vertido (total menos 100 L de fundación).', h:'Receta: {{agua_mash}} − 100 = {{agua_vertido}} L', c:[{k:'vol', l:'Volumen configurado (L)', t:'num'}] },
+  { id:'2.6.5', s:'2.6', t:'Bomba del HLT a 50 Hz.' },
+  { id:'2.6.6', s:'2.6', t:'Iniciar el pase del agua al macerador.' },
+  { id:'2.6.7', s:'2.6', t:'Con el agua entrando, retirar la cuchilla de salida de grano de la tolva.' },
+  { id:'2.6.8', s:'2.6', t:'Verificar visualmente que la carga de mezcla comenzó en el macerador.' },
+  { id:'2.6.9', s:'2.6', t:'Incorporar el fosfórico de maceración (2.5.8) por partes directamente al macerador mientras carga la mezcla.' },
+  { id:'2.6.9-bis', s:'2.6', t:'Con todo el grano adentro y agua aún pasando por CM01, golpear la tolva superior con mazo de goma hasta que deje de bajar malta.' },
+  { id:'2.6.10', s:'2.6', t:'Cerrar de inmediato F01 y la válvula manual de entrada al terminar la mezcla.' },
+  { id:'2.6.11', s:'2.6', t:'Rake a 40 Hz en reversa por 3 min, luego apagar y subir el rake.' },
+  { id:'2.6.12', s:'2.6', t:'Mezcla adicional manual con la pala.' },
+  { id:'2.6.13', s:'2.6', t:'Iniciar el conteo del tiempo de maceración. La hora de este paso es el inicio.', h:'Maceración: {{t_mac}} min → fin estimado {{fin_mac}}', c:[{k:'t', l:'T° mash real (°C)', t:'num', st:0.1}] },
+  { id:'2.6.14', s:'2.6', t:'Recircular el agua restante del HLT a 50 Hz, F15 y F16 abiertas, F10 cerrada.' },
+  { id:'2.6.15', s:'2.6', t:'Preparar el fosfórico de la fracción de sparge (3 L agua de proceso) e incorporar al HLT. Target pH 5.3 @20 °C lagers delicadas; 5.4–5.5 @20 °C resto.', h:'Fosfórico sparge: {{fosforico_sparge}}', c:[{k:'ml', l:'Fosfórico sparge (mL)', t:'num'},{k:'ph', l:'pH agua sparge', t:'num', st:0.01},{k:'tph', l:'T° medición pH (°C)', t:'num'}] },
+  { id:'2.6.16', s:'2.6', t:'Temperatura automática del HLT a 73.5 °C (llega a ~75 °C por inercia).' },
+  { id:'2.6.17', s:'2.6', t:'A los 20 min de maceración, muestra con cucharón y medir pH.', h:'Target: {{ph_mash}} @20 °C', c:[{k:'ph', l:'pH mash', t:'num', st:0.01},{k:'tph', l:'T° medición pH (°C)', t:'num'},{k:'t', l:'T° mash (°C)', t:'num', st:0.1}] },
+  { id:'2.6.18', s:'2.6', t:'Al completar el tiempo de maceración, muestra con cucharón y prueba de yodo.', c:[{k:'yodo', l:'Prueba de yodo', t:'sel', op:['Pasa','No pasa']},{k:'t', l:'T° mash final (°C)', t:'num', st:0.1}] },
+  { id:'2.6.19', s:'2.6', t:'No avanzar hasta que la mezcla pase la prueba de yodo.', k:1 },
+  // ---------- 2.7 Vorlauf y recolección ----------
+  { id:'2.7.1.1', s:'2.7', t:'Reiniciar los medidores de flujo del PLC antes del Vorlauf.' },
+  { id:'2.7.1.2', s:'2.7', t:'Rake elevado y quieto, sin giro, para asentar la cama filtrante.' },
+  { id:'2.7.1.3', s:'2.7', t:'Iniciar el Vorlauf a 19 o 18 Hz según volumen y mantener 10–15 min.', c:[{k:'hz', l:'Hz bomba', t:'num'}] },
+  { id:'2.7.1.4', s:'2.7', t:'Monitorear el visor de turbidez durante todo el Vorlauf.' },
+  { id:'2.7.1.5', s:'2.7', t:'Finalizar el Vorlauf con mosto claro, mínimo 10 min.', c:[{k:'min', l:'Duración Vorlauf (min)', t:'num'}] },
+  { id:'2.7.2.0', s:'2.7', t:'Durante todo el pase al hervidor mantener abiertas F11, F12, F13 y F14.' },
+  { id:'2.7.2.1', s:'2.7', t:'Recolección según SOP de pase del día: IT-AGU-002-003, SOP Rastrillo ML01 y tablas impresas.', c:[{k:'p1', l:'°P primer mosto', t:'num', st:0.1},{k:'pu', l:'°P último mosto', t:'num', st:0.1},{k:'vol', l:'Volumen recolectado (L)', t:'num'},{k:'pre', l:'°P pre-hervor', t:'num', st:0.1}] },
+  { id:'2.7.2.2', s:'2.7', t:'A los primeros 100 L en el hervidor, encender calentamiento a 75 °C desde que el mosto cubre la sonda, tapa abierta, hasta la mitad del volumen.' },
+  { id:'2.7.2.3', s:'2.7', t:'Luego calentamiento a 99 °C, tapa abierta, para el resto de la recolección.' },
+  // ---------- 2.8 Hervor ----------
+  { id:'2.8.0', s:'2.8', t:'Inicio del hervor. La hora de este paso es el minuto 0.', h:'Hervor receta: {{t_hervor}} min → flameout estimado {{fin_hervor}}' },
+  { id:'2.8.1', s:'2.8', t:'Ejecutar el hervor según tiempos, intensidades y adiciones de la receta.', h:'Adiciones: {{adiciones}}', c:[{k:'ad', l:'Adiciones hechas (qué / minuto)', t:'txt'}] },
+  { id:'2.8.2', s:'2.8', t:'Flameout. La hora de este paso es el fin del hervor.', c:[{k:'post', l:'°P post-hervor', t:'num', st:0.1},{k:'vol', l:'Volumen post-hervor (L)', t:'num'}] },
+  // ---------- 2.9 Whirlpool ----------
+  { id:'2.9.1.1', s:'2.9', t:'Al flameout, bomba apagada y tanque en reposo.' },
+  { id:'2.9.1.2', s:'2.9', t:'Estado inicial: F11, F12, F13, F14 y F18 cerradas.' },
+  { id:'2.9.1.3', s:'2.9', t:'Tapa abierta 5 min. Observar que desaparezcan los volcanes (calor residual de la placa).' },
+  { id:'2.9.1.4', s:'2.9', t:'Si persisten volcanes a los 5 min, extender la pausa. No arrancar la bomba con placa sobrecalentada.', k:1, c:[{k:'min', l:'Pausa térmica total (min)', t:'num'}] },
+  { id:'2.9.2.1', s:'2.9', t:'Abrir F11 (entrada tangencial, descarga de bomba).' },
+  { id:'2.9.2.2', s:'2.9', t:'Abrir F13 (salida lateral media, succión).' },
+  { id:'2.9.2.3', s:'2.9', t:'Confirmar F12, F14 y F18 cerradas antes de arrancar la bomba.', k:1 },
+  { id:'2.9.3.1', s:'2.9', t:'Homogeneización térmica: 30 Hz × 2 min.' },
+  { id:'2.9.3.2', s:'2.9', t:'Arranque del vórtice: 50 Hz × 2 min (subir manualmente el VFD).' },
+  { id:'2.9.3.3', s:'2.9', t:'Sostén: 45 Hz × 7 min. Dimple target 3–5 cm; ajustar ±5 Hz si está fuera de rango.', c:[{k:'hz', l:'Hz sostén', t:'num'},{k:'dimple', l:'Dimple (cm)', t:'num'}] },
+  { id:'2.9.3.4', s:'2.9', t:'Deceleración: 25 Hz × 3 min (bajar manualmente).' },
+  { id:'2.9.4.1', s:'2.9', t:'Apagar WB01 (VFD a 0 u off). F11 y F13 quedan momentáneamente abiertas.' },
+  { id:'2.9.4.2', s:'2.9', t:'Esperar 15–30 s hasta que cese el ruido de la bomba.', k:1 },
+  { id:'2.9.4.3', s:'2.9', t:'Cerrar F13 (succión) primero.' },
+  { id:'2.9.4.4', s:'2.9', t:'Cerrar F11 (descarga) después. Tanque aislado.' },
+  { id:'2.9.4.5', s:'2.9', t:'CRÍTICO: nunca cerrar una válvula con la bomba encendida (cavitación, golpe de ariete, sello de WB01).', k:1 },
+  { id:'2.9.5.1', s:'2.9', t:'Reposo 25–30 min sin perturbación. La hora de este paso es el inicio del reposo.', h:'Tope: {{tope_reposo}} min ({{tipo}}) por DMS' },
+  { id:'2.9.5.2', s:'2.9', t:'Durante el reposo: no golpear el tanque, no arrastrar mangueras, no operar válvulas bruscamente, no iniciar CIP.' },
+  { id:'2.9.5.3', s:'2.9', t:'Fin del reposo. Tope 30 min ales / 20 min lagers por control de DMS.', k:1, c:[{k:'min', l:'Reposo real (min)', t:'num'}] },
+  // ---------- 2.10 Transferencia ----------
+  { id:'2.10.1.1', s:'2.10', t:'Encender la bomba del CLT en modo automático.' },
+  { id:'2.10.1.2', s:'2.10', t:'Verificar F19 abierta.' },
+  { id:'2.10.1.3', s:'2.10', t:'Temperatura de enfriamiento en el PLC = temperatura de fermentación de la receta.', h:'T° fermentación: {{t_ferm}} °C', c:[{k:'set', l:'Setpoint PLC (°C)', t:'num', st:0.1}] },
+  { id:'2.10.1.4', s:'2.10', t:'Confirmar temperatura del CLT del día: 12 °C ale / 8 °C lager (o receta).', h:'Target CLT: {{t_clt}} °C', c:[{k:'t', l:'T° CLT (°C)', t:'num', st:0.1}] },
+  { id:'2.10.1.5', s:'2.10', t:'Reiniciar el medidor de flujo antes de iniciar la transferencia.' },
+  { id:'2.10.2.1', s:'2.10', t:'Abrir F14 (salida lateral superior) y F18 (línea hacia HX).' },
+  { id:'2.10.2.2', s:'2.10', t:'Confirmar F13, F12 y F11 cerradas.' },
+  { id:'2.10.2.3', s:'2.10', t:'Mantener abiertas las válvulas de la "T" del fermentador para purgar el desinfectante.' },
+  { id:'2.10.3.1', s:'2.10', t:'Pase por F14 a 40 Hz (20–22 LPM, ≈20–22 min). Cuando salga mosto del fermentador, cambiar el flujo de la "T" hacia el FV.', c:[{k:'lpm', l:'Caudal (LPM)', t:'num'},{k:'t', l:'T° salida HX (°C)', t:'num', st:0.1}] },
+  { id:'2.10.3.2', s:'2.10', t:'Solapamiento F14→F13: abrir F13 con F14 abierta, confirmar caudal estable, cerrar F14.' },
+  { id:'2.10.3.3', s:'2.10', t:'Bajar a 35 Hz después de cerrar F14.' },
+  { id:'2.10.3.4', s:'2.10', t:'Pase por F13 a 35 Hz (17–19 LPM, ≈28–32 min). Monitorear señales de cambio.' },
+  { id:'2.10.3.5', s:'2.10', t:'Solapamiento F13→F12: abrir F12 con F13 abierta, confirmar caudal, cerrar F13.' },
+  { id:'2.10.3.6', s:'2.10', t:'Bajar a 28 Hz después de cerrar F13.' },
+  { id:'2.10.3.7', s:'2.10', t:'Pase por F12 residual a 28 Hz (13–15 LPM, ≈10–13 min). Últimos ~170 L. Detener según 2.10.4.' },
+  { id:'2.10.4.3', s:'2.10', t:'No llevar al fondo seco. Detener al aparecer turbidez, partículas o color más oscuro en el visor post-HX. Pérdida esperada 30–60 L.', k:1, c:[{k:'vol', l:'Volumen al FV (L)', t:'num'},{k:'p', l:'°P original (OG)', t:'num', st:0.1},{k:'t', l:'T° mosto en FV (°C)', t:'num', st:0.1},{k:'motivo', l:'Motivo de parada', t:'sel', op:['Turbidez','Partículas','Color','Cavitación','Fondo']}] },
+  { id:'2.10.5.1', s:'2.10', t:'Adiciones al fermentador según receta (Clearzyme, SpringFerm BR-2, levadura) con el mosto frío al inocular.', h:'Receta FV: {{adiciones_fv}} · Levadura: {{levadura}}', c:[{k:'ad', l:'Adiciones hechas', t:'txt'},{k:'lev', l:'Levadura (lote / cantidad)', t:'txt'}] },
+  { id:'2.10.5.2', s:'2.10', t:'Oxigenación si la receta lo indica: O₂ por piedra difusora post-HX. Target 8–12 ppm, flujo 2–4 L/min.', h:'Receta: {{o2}}', c:[{k:'lmin', l:'Flujo O₂ (L/min)', t:'num', st:0.1},{k:'min', l:'Tiempo (min)', t:'num'}] },
+  // ---------- 2.11 Limpieza ----------
+  { id:'2.11.1', s:'2.11', t:'Limpieza del hervidor: bomba de mosto 50 Hz + bomba CIP 40 Hz.' },
+  { id:'2.11.2', s:'2.11', t:'Limpieza a contraflujo de la línea: F14, luego F13, luego F11.' }
+];
+// Campos de receta que se cargan al crear el lote
+var RECETA_CAMPOS = [
+  { k:'nombre', l:'Nombre del lote', t:'txt', req:1, ph:'ej. Lalemana L-2609' },
+  { k:'estilo', l:'Estilo / cerveza', t:'txt', req:1, ph:'ej. Helles' },
+  { k:'tipo', l:'Tipo', t:'sel', op:['ale','lager'], req:1 },
+  { k:'fecha', l:'Fecha de cocción', t:'date', req:1 },
+  { k:'operador', l:'Operador', t:'txt', req:1 },
+  { k:'fv', l:'Fermentador', t:'txt', ph:'ej. FV3' },
+  { k:'vol_adh', l:'Volumen ADH (L)', t:'num', req:1 },
+  { k:'og', l:'°P objetivo (OG)', t:'num', st:0.1 },
+  { k:'grist', l:'Grist (maltas y kg)', t:'area', ph:'Pilsner 200 kg; Carahell 10 kg…' },
+  { k:'molienda', l:'Molienda (mm / perillas)', t:'txt', ph:'1.0–1.2 mm, perillas 1.3' },
+  { k:'agua_mash', l:'Agua de maceración (L)', t:'num', req:1 },
+  { k:'agua_total', l:'Agua total de cocción (L)', t:'num', req:1, hint:'Maceración + sparge. La app suma 600 L de enjuague.' },
+  { k:'t_mash', l:'T° de maceración (°C)', t:'num', st:0.1, req:1 },
+  { k:'t_mac', l:'Tiempo de maceración (min)', t:'num', req:1 },
+  { k:'ph_mash', l:'pH mash objetivo @20 °C', t:'num', st:0.01 },
+  { k:'sales', l:'Sales', t:'area', ph:'CaCl₂ 300 g; CaSO₄ 150 g…' },
+  { k:'ascorbico', l:'Ácido ascórbico', t:'txt', ph:'ej. 20 g' },
+  { k:'fosforico_mash', l:'Ácido fosfórico maceración', t:'txt', ph:'ej. 120 mL' },
+  { k:'fosforico_sparge', l:'Ácido fosfórico sparge', t:'txt', ph:'ej. 80 mL' },
+  { k:'t_hervor', l:'Tiempo de hervor (min)', t:'num', req:1 },
+  { k:'adiciones', l:'Adiciones de hervor (minuto, qué, cantidad)', t:'area', ph:'60 min: Magnum 400 g\n10 min: Whirlfloc 4 tab\n0 min: Saaz 1 kg' },
+  { k:'t_ferm', l:'T° de fermentación (°C)', t:'num', st:0.1, req:1 },
+  { k:'t_clt', l:'T° CLT (°C)', t:'num', st:0.1, hint:'Vacío = 12 ale / 8 lager' },
+  { k:'levadura', l:'Levadura', t:'txt', ph:'ej. W-34/70 × 12 sobres' },
+  { k:'adiciones_fv', l:'Adiciones al fermentador', t:'txt', ph:'Clearzyme, SpringFerm BR-2' },
+  { k:'o2', l:'Oxigenación', t:'sel', op:['No','Sí'] },
+  { k:'notas', l:'Notas', t:'area' }
+];
+// ===== APP =====
+var APP_VERSION = 'F1';
+var API_URL = 'https://script.google.com/macros/s/AKfycbwplaw64-4SfAZmEcrMEDcY7a_1vRzItvPx_xEOJgtTJgfNNRByVsK_plwg5R-D-x4b/exec';
+var LS = { op:'coc_operador', lotes:'coc_lotes', lote:'coc_lote_', cola:'coc_cola', ui:'coc_ui' };
+var estado = { vista:'lista', loteId:null, lote:null, registros:[], editandoId:null, online:navigator.onLine, sync:false, abiertas:{} };
+
+// ---------- utilidades ----------
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function lsGet(k,def){ try{ var v=localStorage.getItem(k); return v==null?def:JSON.parse(v);}catch(e){return def;} }
+function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+function ahoraISO(){ return new Date().toISOString(); }
+function hhmm(iso){ if(!iso) return ''; var d=new Date(iso); if(isNaN(d)) return ''; return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+function fechaCorta(s){ if(!s) return ''; var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m? m[3]+'/'+m[2]+'/'+m[1] : s; }
+function uid_(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function num(v){ var n=parseFloat(String(v).replace(',','.')); return isNaN(n)?null:n; }
+function fmt(n,d){ return n==null?'—':(Math.round(n*Math.pow(10,d||0))/Math.pow(10,d||0)).toString(); }
+function minutosEntre(a,b){ if(!a||!b) return null; return Math.round((new Date(b)-new Date(a))/60000); }
+var toastT;
+function toast(msg,bad){ var t=document.querySelector('.toast'); if(!t){t=document.createElement('div');t.className='toast';document.body.appendChild(t);} t.textContent=msg; t.className='toast'+(bad?' bad':''); clearTimeout(toastT); toastT=setTimeout(function(){t.remove();},bad?5000:2500); }
+function setEstado(){ var e=$('estado'); var cola=colaTotal(); if(!estado.online){e.textContent='sin conexión'+(cola?' · '+cola+' pend.':'');e.className='off';} else if(estado.sync){e.textContent='sincronizando…';e.className='';} else if(cola){e.textContent=cola+' pendiente'+(cola>1?'s':'');e.className='pend';} else {e.textContent='al día';e.className='';} }
+
+// ---------- API ----------
+function api(fn,datos){
+  var url=API_URL+'?api='+encodeURIComponent(fn)+'&datos='+encodeURIComponent(JSON.stringify(datos||{}))+'&_='+Date.now();
+  var ctrl=('AbortController' in window)?new AbortController():null;
+  var to=ctrl?setTimeout(function(){ctrl.abort();},40000):null;
+  return fetch(url,{method:'GET',redirect:'follow',cache:'no-store',signal:ctrl?ctrl.signal:undefined}).then(function(r){return r.json();}).then(function(j){ if(to) clearTimeout(to); if(!j||j.ok!==true) throw new Error(j&&j.error||'respuesta inválida'); return j; }).catch(function(e){ if(to) clearTimeout(to); throw e; });
+}
+
+// ---------- operador ----------
+function operador(){ return lsGet(LS.op,''); }
+function pedirOperador(forzar){ var cur=operador(); if(cur&&!forzar){ $('opNombre').textContent=cur; return cur; } var n=prompt('Nombre del operador:',cur||''); if(n&&n.trim()){ lsSet(LS.op,n.trim()); } $('opNombre').textContent=operador()||'—'; return operador(); }
+
+// ---------- cola offline ----------
+function colaGet(){ return lsGet(LS.cola,{}); }
+function colaSet(c){ lsSet(LS.cola,c); setEstado(); }
+function colaTotal(){ var c=colaGet(),n=0; for(var k in c){ if(c[k].eventos) n+=c[k].eventos.length; if(c[k].crear) n++; if(c[k].receta) n++; if(c[k].estado) n++; } return n; }
+function encolar(id,tipo,obj){ var c=colaGet(); c[id]=c[id]||{eventos:[]}; if(tipo==='evento') c[id].eventos.push(obj); else c[id][tipo]=obj; colaSet(c); }
+
+function sincronizar(manual){
+  if(estado.sync){ return Promise.resolve(); }
+  if(!estado.online){ if(manual) toast('Sin conexión: se guardó en el dispositivo',true); return Promise.resolve(); }
+  var c=colaGet(); var ids=Object.keys(c); if(!ids.length){ if(manual) return refrescar(true); return Promise.resolve(); }
+  estado.sync=true; setEstado();
+  var p=Promise.resolve();
+  ids.forEach(function(id){
+    p=p.then(function(){
+      var it=colaGet()[id]; if(!it) return;
+      var q=Promise.resolve();
+      if(it.crear){ q=q.then(function(){ return api('loteCrear',{id:id,receta:it.crear}).then(function(){ var cc=colaGet(); if(cc[id]) delete cc[id].crear; colaSet(cc); }); }); }
+      if(it.receta){ q=q.then(function(){ return api('loteEditar',{id:id,receta:it.receta}).then(function(){ var cc=colaGet(); if(cc[id]) delete cc[id].receta; colaSet(cc); }); }); }
+      if(it.eventos&&it.eventos.length){ q=q.then(function(){ var evs=colaGet()[id].eventos.slice(); return api('pasoLote',{id:id,eventos:evs}).then(function(){ var loc=loteLocal(id); if(loc){ var have={}; loc.registros.forEach(function(r){have[r.uid]=1;}); evs.forEach(function(e){ if(!have[e.uid]) loc.registros.push(e); }); guardarLoteLocal(id,loc.lote,loc.registros); } var cc=colaGet(); if(cc[id]){ var enviados={}; evs.forEach(function(e){enviados[e.uid]=1;}); cc[id].eventos=cc[id].eventos.filter(function(e){return !enviados[e.uid];}); } colaSet(cc); }); }); }
+      if(it.estado){ q=q.then(function(){ return api('loteEstado',{id:id,estado:it.estado}).then(function(){ var cc=colaGet(); if(cc[id]) delete cc[id].estado; colaSet(cc); }); }); }
+      return q.then(function(){ var cc=colaGet(); if(cc[id]&&!cc[id].crear&&!cc[id].receta&&!cc[id].estado&&!(cc[id].eventos&&cc[id].eventos.length)) { delete cc[id]; colaSet(cc); } });
+    });
+  });
+  return p.then(function(){ estado.sync=false; setEstado(); return refrescar(false); }).catch(function(e){ estado.sync=false; setEstado(); toast('Sincronización: '+e.message,true); });
+}
+
+// ---------- datos locales ----------
+function loteLocal(id){ return lsGet(LS.lote+id,null); }
+function guardarLoteLocal(id,lote,registros){ lsSet(LS.lote+id,{lote:lote,registros:registros||[],at:ahoraISO()}); }
+function registrosEfectivos(id){ // servidor + cola local (la cola gana por ser más nueva)
+  var loc=loteLocal(id); var regs=(loc&&loc.registros||[]).slice(); var c=colaGet()[id]; if(c&&c.eventos) regs=regs.concat(c.eventos.map(function(e){ var o={}; for(var k in e) o[k]=e[k]; o._pend=1; return o; })); return regs;
+}
+function estadoPasos(regs){ var m={}; regs.forEach(function(r){ var cur=m[r.paso]; if(!cur||r.ts>=cur.ts) m[r.paso]=r; }); return m; }
+
+function refrescar(mostrar){ // trae del servidor lo que corresponde a la vista actual
+  if(!estado.online) return Promise.resolve();
+  if(estado.vista==='lista'){ return api('lotes',{}).then(function(j){ lsSet(LS.lotes,j.lotes); renderLista(); }).catch(function(e){ if(mostrar) toast('No se pudo cargar: '+e.message,true); }); }
+  if(estado.vista==='lote'&&estado.loteId){ var id=estado.loteId; var cc=colaGet()[id]; if(cc&&cc.crear) return Promise.resolve(); return api('loteGet',{id:id}).then(function(j){ if(!j.lote||!j.lote.id) throw new Error('lote no encontrado'); guardarLoteLocal(id,j.lote,j.registros); if(estado.loteId===id){ estado.lote=j.lote; renderLote(false); } }).catch(function(e){ if(mostrar) toast('No se pudo cargar: '+e.message,true); }); }
+  return Promise.resolve();
+}
+
+// ---------- navegación ----------
+function mostrar(v){ estado.vista=v; ['vLista','vNuevo','vLote'].forEach(function(x){ $(x).classList.add('hidden'); }); $({lista:'vLista',nuevo:'vNuevo',lote:'vLote'}[v]).classList.remove('hidden'); $('btnBack').classList.toggle('hidden',v==='lista'); window.scrollTo(0,0); }
+function irLista(){ estado.loteId=null; estado.lote=null; mostrar('lista'); $('titulo').textContent='Cocción Hammurabier'; renderLista(); refrescar(false); }
+function irNuevo(){ estado.editandoId=null; $('nuevoTit').textContent='Nuevo lote'; renderForm({fecha:new Date().toISOString().slice(0,10),operador:operador()}); mostrar('nuevo'); $('titulo').textContent='Nuevo lote'; }
+function cancelarNuevo(){ if(estado.editandoId) abrirLote(estado.editandoId); else irLista(); }
+function abrirLote(id){ estado.loteId=id; var loc=loteLocal(id); estado.lote=loc?loc.lote:null; mostrar('lote'); if(!estado.lote){ $('loteCab').innerHTML='<span class="mut">Cargando…</span>'; $('secciones').innerHTML=''; $('resumen').innerHTML=''; } else renderLote(true); refrescar(true); }
+
+// ---------- lista ----------
+function renderLista(){
+  var lotes=lsGet(LS.lotes,[]); var c=colaGet();
+  // lotes creados offline que aún no están en la lista del servidor
+  Object.keys(c).forEach(function(id){ if(c[id].crear&&!lotes.some(function(l){return l.id===id;})){ var r=c[id].crear; lotes.unshift({id:id,estado:'ABIERTO',nombre:r.nombre,estilo:r.estilo,tipo:r.tipo,fecha:r.fecha,operador:r.operador,_pend:1}); } });
+  var h=''; lotes.forEach(function(l){ var pend=c[l.id]&&(c[l.id].eventos||[]).length; h+='<div class="lote-item" onclick="abrirLote(\''+esc(l.id)+'\')"><div class="grow"><div class="n">'+esc(l.nombre)+'</div><div class="mut">'+esc(l.estilo)+' · '+esc(l.tipo)+' · '+fechaCorta(l.fecha)+(l.operador?' · '+esc(l.operador):'')+'</div></div>'+(pend?'<span class="tag" style="background:var(--warnbg);color:var(--warn)">'+pend+' pend.</span>':'')+'<span class="tag '+(l.estado==='ABIERTO'?'ab':'ce')+'">'+esc(l.estado)+'</span></div>'; });
+  $('listaLotes').innerHTML=h; $('listaVacia').classList.toggle('hidden',lotes.length>0);
+}
+
+// ---------- formulario de receta ----------
+function renderForm(r){
+  r=r||{}; var h='';
+  RECETA_CAMPOS.forEach(function(f){ var v=r[f.k]==null?'':r[f.k]; var inp='';
+    if(f.t==='sel') inp='<select id="rc_'+f.k+'"><option value="">—</option>'+f.op.map(function(o){return '<option'+(String(v)===o?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
+    else if(f.t==='area') inp='<textarea id="rc_'+f.k+'" placeholder="'+esc(f.ph||'')+'">'+esc(v)+'</textarea>';
+    else inp='<input id="rc_'+f.k+'" type="'+(f.t==='num'?'number':f.t==='date'?'date':'text')+'"'+(f.st?' step="'+f.st+'"':f.t==='num'?' step="any"':'')+' inputmode="'+(f.t==='num'?'decimal':'text')+'" value="'+esc(v)+'" placeholder="'+esc(f.ph||'')+'">';
+    h+='<div class="field'+(f.req?' req':'')+(f.t==='area'?' full':'')+'"><label for="rc_'+f.k+'">'+esc(f.l)+'</label>'+inp+(f.hint?'<div class="hint">'+esc(f.hint)+'</div>':'')+'</div>'; });
+  $('formReceta').innerHTML=h;
+}
+function leerForm(){ var r={}; var faltan=[]; RECETA_CAMPOS.forEach(function(f){ var el=$('rc_'+f.k); var v=el?el.value.trim():''; if(f.t==='num'&&v!==''){ var n=num(v); v=n==null?'':n; } r[f.k]=v; if(f.req&&v==='') faltan.push(f.l); }); return {receta:r,faltan:faltan}; }
+function guardarLote(){
+  var lf=leerForm(); if(lf.faltan.length){ toast('Faltan: '+lf.faltan.join(', '),true); return; }
+  var r=lf.receta; if(r.operador) lsSet(LS.op,r.operador);
+  if(estado.editandoId){ var id=estado.editandoId; var loc=loteLocal(id); if(loc){ loc.lote.receta=r; loc.lote.nombre=r.nombre; loc.lote.estilo=r.estilo; loc.lote.tipo=r.tipo; loc.lote.fecha=r.fecha; loc.lote.operador=r.operador; guardarLoteLocal(id,loc.lote,loc.registros); } encolar(id,'receta',r); toast('Receta guardada'); abrirLote(id); sincronizar(false); return; }
+  var d=new Date(); var nid='L'+d.getFullYear()+('0'+(d.getMonth()+1)).slice(-2)+('0'+d.getDate()).slice(-2)+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+  var lote={id:nid,creado:ahoraISO(),estado:'ABIERTO',nombre:r.nombre,estilo:r.estilo,tipo:r.tipo,fecha:r.fecha,operador:r.operador,receta:r,inicio:'',fin:''};
+  guardarLoteLocal(nid,lote,[]); encolar(nid,'crear',r); toast('Lote creado'); abrirLote(nid); sincronizar(false);
+}
+function editarReceta(){ if(!estado.lote) return; if(estado.lote.estado!=='ABIERTO'){ toast('Lote cerrado: no se edita',true); return; } estado.editandoId=estado.loteId; $('nuevoTit').textContent='Editar receta — '+estado.lote.nombre; renderForm(estado.lote.receta); mostrar('nuevo'); $('titulo').textContent='Editar receta'; }
+function verReceta(){ if(!estado.lote) return; var r=estado.lote.receta||{}; var t=RECETA_CAMPOS.filter(function(f){return r[f.k]!==''&&r[f.k]!=null;}).map(function(f){return f.l+': '+r[f.k];}).join('\n'); alert(t||'Sin receta'); }
+function cerrarLote(){ if(!estado.lote) return; if(estado.lote.estado!=='ABIERTO'){ toast('Ya está cerrado'); return; } if(colaGet()[estado.loteId]&&(colaGet()[estado.loteId].eventos||[]).length){ toast('Hay registros pendientes de sincronizar. Sincronizá antes de cerrar.',true); return; } if(!confirm('¿Cerrar el lote '+estado.lote.nombre+'? No se podrán registrar más pasos.')) return; var loc=loteLocal(estado.loteId); loc.lote.estado='CERRADO'; loc.lote.fin=ahoraISO(); guardarLoteLocal(estado.loteId,loc.lote,loc.registros); estado.lote=loc.lote; encolar(estado.loteId,'estado','CERRADO'); renderLote(false); sincronizar(false); }
+
+// ---------- derivados de receta ----------
+function derivados(lote,pasos){
+  var r=lote.receta||{}; var d={}; for(var k in r) d[k]=r[k];
+  d.tipo=r.tipo||''; var lager=r.tipo==='lager';
+  d.agua_hlt=num(r.agua_total)!=null?num(r.agua_total)+600:'?';
+  d.t_hlt_set=num(r.t_mash)!=null?fmt(num(r.t_mash)+6,1):'?';
+  d.agua_vertido=num(r.agua_mash)!=null?num(r.agua_mash)-100:'?';
+  d.t_clt=num(r.t_clt)!=null?num(r.t_clt):(lager?8:12);
+  var adh=num(r.vol_adh); d.vol_clt=adh==null?'?':(adh>=1000?1600:1200);
+  d.tope_reposo=lager?20:30;
+  var ini=pasos['2.6.13']; d.fin_mac=(ini&&ini.hecho&&num(r.t_mac)!=null)?hhmm(new Date(new Date(ini.ts).getTime()+num(r.t_mac)*60000).toISOString()):'—';
+  var h0=pasos['2.8.0']; d.fin_hervor=(h0&&h0.hecho&&num(r.t_hervor)!=null)?hhmm(new Date(new Date(h0.ts).getTime()+num(r.t_hervor)*60000).toISOString()):'—';
+  RECETA_CAMPOS.forEach(function(f){ if(d[f.k]===''||d[f.k]==null) d[f.k]='—'; });
+  return d;
+}
+function hint(tpl,d){ return tpl.replace(/\{\{(\w+)\}\}/g,function(_,k){ return d[k]==null?'—':String(d[k]); }); }
+
+// ---------- checklist ----------
+function renderLote(inicial){
+  var lote=estado.lote; if(!lote) return;
+  var regs=registrosEfectivos(lote.id); var pasos=estadoPasos(regs); var d=derivados(lote,pasos);
+  var hechos=PASOS.filter(function(p){return pasos[p.id]&&pasos[p.id].hecho;}).length;
+  $('titulo').textContent=lote.nombre;
+  $('loteCab').innerHTML='<div class="row"><div class="grow"><div style="font-size:18px;font-weight:700">'+esc(lote.nombre)+'</div><div class="mut">'+esc(lote.estilo)+' · '+esc(lote.tipo)+' · '+fechaCorta(lote.fecha)+' · '+esc(d.vol_adh)+' L ADH · FV '+esc(d.fv)+'</div></div><span class="tag '+(lote.estado==='ABIERTO'?'ab':'ce')+'">'+esc(lote.estado)+'</span></div><div class="prog"><i style="width:'+Math.round(100*hechos/PASOS.length)+'%"></i></div><div class="mut" style="margin-top:4px">'+hechos+' / '+PASOS.length+' pasos</div>';
+  renderResumen(pasos,d);
+  var abierto=lote.estado==='ABIERTO';
+  // sección abierta por defecto: la primera con pasos pendientes
+  if(inicial){ estado.abiertas={}; var first=null; for(var i=0;i<PASOS.length;i++){ if(!(pasos[PASOS[i].id]&&pasos[PASOS[i].id].hecho)){ first=PASOS[i].s; break; } } if(first) estado.abiertas[first]=1; }
+  var h='';
+  SECCIONES.forEach(function(s){
+    var ps=PASOS.filter(function(p){return p.s===s.id;}); var n=ps.filter(function(p){return pasos[p.id]&&pasos[p.id].hecho;}).length;
+    h+='<div class="sec'+(estado.abiertas[s.id]?' open':'')+(n===ps.length?' done':'')+'" id="sec_'+s.id.replace(/\./g,'_')+'"><h2 onclick="toggleSec(\''+s.id+'\')"><span class="chev">›</span>'+esc(s.n)+'<span class="cnt">'+n+'/'+ps.length+'</span></h2><div class="body">';
+    ps.forEach(function(p){ h+=renderPaso(p,pasos[p.id],d,abierto); });
+    h+='</div></div>';
+  });
+  $('secciones').innerHTML=h; $('btnCerrar').classList.toggle('hidden',!abierto);
+}
+function toggleSec(id){ estado.abiertas[id]=!estado.abiertas[id]; var el=$('sec_'+id.replace(/\./g,'_')); if(el) el.classList.toggle('open',!!estado.abiertas[id]); }
+function pid(id){ return id.replace(/[^A-Za-z0-9]/g,'_'); }
+function renderPaso(p,st,d,abierto){
+  var done=!!(st&&st.hecho); var vals=st&&st.valores||{};
+  var h='<div class="paso'+(done?' done':'')+(p.k?' crit':'')+'" id="paso_'+pid(p.id)+'"><div class="top"><span class="id">'+esc(p.id)+'</span><div class="txt">'+esc(p.t);
+  if(p.h) h+='<div class="h">'+esc(hint(p.h,d)).replace(/\n/g,'<br>')+'</div>';
+  h+='</div></div>';
+  if(p.c&&p.c.length){
+    if(done){ var vs=p.c.filter(function(c){return vals[c.k]!==''&&vals[c.k]!=null;}).map(function(c){return '<b>'+esc(c.l)+':</b> '+esc(vals[c.k]);}); if(vs.length) h+='<div class="vals">'+vs.join(' · ')+'</div>'; }
+    else if(abierto){ h+='<div class="campos">'; p.c.forEach(function(c){ var v=vals[c.k]==null?'':vals[c.k]; var id='c_'+pid(p.id)+'_'+c.k; h+='<div><label for="'+id+'">'+esc(c.l)+'</label>';
+      if(c.t==='sel') h+='<select id="'+id+'"><option value="">—</option>'+c.op.map(function(o){return '<option'+(String(v)===o?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
+      else if(c.t==='txt') h+='<input id="'+id+'" type="text" value="'+esc(v)+'">';
+      else h+='<input id="'+id+'" type="number" step="'+(c.st||'any')+'" inputmode="decimal" value="'+esc(v)+'">';
+      h+='</div>'; }); h+='</div>'; }
+  }
+  if(done&&st.nota) h+='<div class="vals"><b>Nota:</b> '+esc(st.nota)+'</div>';
+  if(!done&&abierto) h+='<div class="nota"><input id="n_'+pid(p.id)+'" type="text" placeholder="Nota (opcional)" value="'+esc(st&&st.nota||'')+'"></div>';
+  h+='<div class="acc">';
+  if(done){ h+='<span class="meta'+(st._pend?' pend':'')+'">✓ '+hhmm(st.ts)+(st.operador?' · '+esc(st.operador):'')+(st._pend?' · pendiente de enviar':'')+'</span>'; if(abierto) h+='<button class="btn sm sec" onclick="reabrirPaso(\''+esc(p.id)+'\')">Editar</button>'; }
+  else if(abierto){ h+='<button class="btn ok" onclick="marcarPaso(\''+esc(p.id)+'\')">Hecho</button>'; if(st&&!st.hecho&&st.ts) h+='<span class="mut">deshecho '+hhmm(st.ts)+'</span>'; }
+  h+='</div></div>'; return h;
+}
+function leerCampos(p){ var v={}; var faltan=[]; (p.c||[]).forEach(function(c){ var el=$('c_'+pid(p.id)+'_'+c.k); var x=el?el.value.trim():''; if(c.t==='num'&&x!==''){ var n=num(x); x=n==null?'':n; } v[c.k]=x; }); return v; }
+function marcarPaso(id){
+  var p=PASOS.filter(function(x){return x.id===id;})[0]; if(!p) return; var op=operador()||pedirOperador(true); if(!op){ toast('Falta el operador',true); return; }
+  var vals=leerCampos(p); var nel=$('n_'+pid(id)); var nota=nel?nel.value.trim():'';
+  if(p.id==='2.6.19'){ var y=estadoPasos(registrosEfectivos(estado.loteId))['2.6.18']; if(!(y&&y.hecho&&y.valores&&y.valores.yodo==='Pasa')){ if(!confirm('La prueba de yodo (2.6.18) no está registrada como "Pasa". ¿Avanzar igual?')) return; nota=(nota?nota+' ':'')+'[avanzó sin yodo Pasa]'; } }
+  if(p.id==='2.9.5.3'){ var ini=estadoPasos(registrosEfectivos(estado.loteId))['2.9.5.1']; if(ini&&ini.hecho&&vals.min===''){ vals.min=minutosEntre(ini.ts,ahoraISO()); } }
+  registrar(id,1,vals,nota,op);
+}
+function reabrirPaso(id){ var op=operador(); registrar(id,0,{},'',op); }
+function registrar(paso,hecho,valores,nota,op){
+  var ev={uid:uid_(),paso:paso,ts:ahoraISO(),hecho:hecho?1:0,operador:op,valores:valores||{},nota:nota||''};
+  encolar(estado.loteId,'evento',ev); if(hecho){ var p=PASOS.filter(function(x){return x.id===paso;})[0]; var st=estadoPasos(registrosEfectivos(estado.loteId)); var ps=PASOS.filter(function(x){return x.s===p.s;}); if(ps.every(function(x){return st[x.id]&&st[x.id].hecho;})){ var i=SECCIONES.findIndex(function(s){return s.id===p.s;}); if(i>=0&&i+1<SECCIONES.length){ estado.abiertas[p.s]=false; estado.abiertas[SECCIONES[i+1].id]=true; } } } renderLote(false); var el=$('paso_'+pid(paso)); if(el&&hecho){ el.scrollIntoView({block:'nearest'}); }
+  sincronizar(false);
+}
+
+// ---------- resumen ----------
+function renderResumen(pasos,d){
+  function v(id,k){ var s=pasos[id]; return s&&s.hecho&&s.valores&&s.valores[k]!==''&&s.valores[k]!=null?s.valores[k]:null; }
+  function t(id){ var s=pasos[id]; return s&&s.hecho?hhmm(s.ts):null; }
+  var items=[
+    ['pH mash', v('2.6.17','ph')!=null? v('2.6.17','ph')+' @'+(v('2.6.17','tph')||'?')+' °C':null],
+    ['Yodo', v('2.6.18','yodo')],
+    ['Maceración', t('2.6.13')? t('2.6.13')+' → '+(t('2.6.18')||d.fin_mac):null],
+    ['°P pre-hervor', v('2.7.2.1','pre')],
+    ['Vol. hervidor', v('2.7.2.1','vol')!=null? v('2.7.2.1','vol')+' L':null],
+    ['Hervor', t('2.8.0')? t('2.8.0')+' → '+(t('2.8.2')||d.fin_hervor):null],
+    ['°P post-hervor', v('2.8.2','post')],
+    ['Reposo WP', v('2.9.5.3','min')!=null? v('2.9.5.3','min')+' min':(t('2.9.5.1')?'desde '+t('2.9.5.1'):null)],
+    ['OG (°P)', v('2.10.4.3','p')],
+    ['Vol. al FV', v('2.10.4.3','vol')!=null? v('2.10.4.3','vol')+' L':null],
+    ['T° al FV', v('2.10.4.3','t')!=null? v('2.10.4.3','t')+' °C':null],
+    ['Fin pase', t('2.10.5.1')]
+  ];
+  $('resumen').innerHTML=items.map(function(it){ return '<div><small>'+esc(it[0])+'</small><span>'+(it[1]==null?'<span class="mut">—</span>':esc(it[1]))+'</span></div>'; }).join('');
+}
+
+// ---------- arranque ----------
+window.addEventListener('online',function(){ estado.online=true; setEstado(); sincronizar(false); });
+window.addEventListener('offline',function(){ estado.online=false; setEstado(); });
+document.addEventListener('visibilitychange',function(){ if(!document.hidden) sincronizar(false); });
+(function init(){
+  $('procVer').textContent=PROC_VERSION; $('appVer').textContent=APP_VERSION;
+  pedirOperador(false); setEstado(); renderLista(); irLista();
+  if(!operador()) setTimeout(function(){ pedirOperador(true); },300);
+  setInterval(function(){ if(colaTotal()) sincronizar(false); },60000);
+})();
+</script>
+</body>
+</html>
