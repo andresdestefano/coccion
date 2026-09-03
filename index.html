@@ -101,6 +101,7 @@ main{max-width:860px;margin:0 auto;padding:12px 12px 90px}
       <div class="grow"><span class="mut">Operador:</span> <b id="opNombre">—</b> <button class="btn sm sec" onclick="pedirOperador(true)">cambiar</button></div>
       <button class="btn" onclick="irNuevo()">+ Nuevo lote</button>
     </div>
+    <div id="opForm" class="card hidden"><div class="row"><input id="opInput" class="grow" type="text" placeholder="Nombre del operador" style="width:auto"><button class="btn" onclick="guardarOperador()">Guardar</button></div></div>
     <div id="listaLotes"></div>
     <p class="mut hidden" id="listaVacia">Sin lotes. Creá el primero.</p>
     <p class="mut" style="font-size:12px;margin-top:20px">Procedimiento <span id="procVer"></span> · App <span id="appVer"></span></p>
@@ -315,7 +316,7 @@ var RECETA_CAMPOS = [
   { k:'notas', l:'Notas', t:'area' }
 ];
 // ===== APP =====
-var APP_VERSION = 'F1';
+var APP_VERSION = 'F2';
 var API_URL = 'https://script.google.com/macros/s/AKfycbwplaw64-4SfAZmEcrMEDcY7a_1vRzItvPx_xEOJgtTJgfNNRByVsK_plwg5R-D-x4b/exec';
 var LS = { op:'coc_operador', lotes:'coc_lotes', lote:'coc_lote_', cola:'coc_cola', ui:'coc_ui' };
 var estado = { vista:'lista', loteId:null, lote:null, registros:[], editandoId:null, online:navigator.onLine, sync:false, abiertas:{} };
@@ -346,7 +347,8 @@ function api(fn,datos){
 
 // ---------- operador ----------
 function operador(){ return lsGet(LS.op,''); }
-function pedirOperador(forzar){ var cur=operador(); if(cur&&!forzar){ $('opNombre').textContent=cur; return cur; } var n=prompt('Nombre del operador:',cur||''); if(n&&n.trim()){ lsSet(LS.op,n.trim()); } $('opNombre').textContent=operador()||'—'; return operador(); }
+function pedirOperador(forzar){ var cur=operador(); if(cur&&!forzar){ $('opNombre').textContent=cur; return cur; } var n=null; try{ n=prompt('Nombre del operador:',cur||''); }catch(e){ n=null; $('opForm').classList.remove('hidden'); $('opInput').value=cur||''; if(estado.vista!=='lista') mostrar('lista'); } if(n&&n.trim()){ lsSet(LS.op,n.trim()); } $('opNombre').textContent=operador()||'—'; return operador(); }
+function guardarOperador(){ var v=$('opInput').value.trim(); if(!v){ toast('Escribí el nombre',true); return; } lsSet(LS.op,v); $('opForm').classList.add('hidden'); $('opNombre').textContent=v; }
 
 // ---------- cola offline ----------
 function colaGet(){ return lsGet(LS.cola,{}); }

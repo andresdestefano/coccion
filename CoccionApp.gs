@@ -1,6 +1,6 @@
 /**
  * CoccionApp.gs — Backend de la App de Cocción Hammurabier
- * Versión B1 · 2026-09-03
+ * Versión B2 · 2026-09-03 — B2: columnas en formato texto (@) para que Sheets no convierta pasos/fechas en Date; lectura normaliza Date→string.
  *
  * Hoja: "Cocciones Hammurabier" con pestañas Lotes y Registros.
  * API (GET o POST): ?api=<funcion>&datos=<json urlencoded>
@@ -20,7 +20,7 @@
  */
 
 var SHEET_ID = ''; // vacío = script vinculado a la hoja (SpreadsheetApp.getActive)
-var VERSION = 'B1';
+var VERSION = 'B2';
 var LOTES_COLS = ['id','creado','estado','nombre','estilo','tipo','fecha','operador','receta','inicio','fin'];
 var REG_COLS = ['uid','id_lote','paso','ts','hecho','operador','valores','nota','recibido'];
 
@@ -63,9 +63,10 @@ function hoja_(nombre, cols) {
   var sh = ss.getSheetByName(nombre);
   if (!sh) {
     sh = ss.insertSheet(nombre);
-    sh.appendRow(cols);
+    sh.getRange(1, 1, 1, cols.length).setValues([cols]);
     sh.setFrozenRows(1);
   }
+  textoCols_(sh, cols.length);
   return sh;
 }
 function setup_() {
@@ -85,7 +86,24 @@ function filas_(sh, cols) {
   }
   return res;
 }
-function str_(v) { return v === null || v === undefined ? '' : String(v); }
+function textoCols_(sh, n) {
+  // Formato texto en todas las columnas: evita que Sheets convierta '2.6.17' o '2026-09-03' en fechas.
+  var key = 'txt_' + sh.getSheetId() + '_' + n;
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty(key)) return;
+  sh.getRange(1, 1, sh.getMaxRows(), n).setNumberFormat('@');
+  props.setProperty(key, '1');
+}
+function escribir_(sh, row, col, filas) {
+  var rg = sh.getRange(row, col, filas.length, filas[0].length);
+  rg.setNumberFormat('@');
+  rg.setValues(filas);
+}
+function str_(v) {
+  if (v === null || v === undefined) return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') return isNaN(v.getTime()) ? '' : v.toISOString();
+  return String(v);
+}
 function json_(s, def) { try { return s ? JSON.parse(s) : def; } catch (e) { return def; } }
 function now_() { return new Date().toISOString(); }
 function nuevoId_() {
@@ -135,7 +153,7 @@ function loteCrear_(d) {
     var existentes = filas_(sh, LOTES_COLS);
     for (var i = 0; i < existentes.length; i++) if (str_(existentes[i].id) === id) return { ok: true, id: id, dup: true };
     var fila = [id, now_(), 'ABIERTO', str_(r.nombre), str_(r.estilo), str_(r.tipo), str_(r.fecha), str_(r.operador), JSON.stringify(r), '', ''];
-    sh.appendRow(fila);
+    escribir_(sh, sh.getLastRow() + 1, 1, [fila]);
     return { ok: true, id: id };
   });
 }
@@ -164,7 +182,7 @@ function loteEditar_(d) {
     var o = buscarLote_(sh, d.id);
     if (!o) return { ok: false, error: 'lote no existe' };
     if (str_(o.estado) !== 'ABIERTO') return { ok: false, error: 'lote cerrado: no se edita' };
-    sh.getRange(o._row, 4, 1, 6).setValues([[str_(r.nombre), str_(r.estilo), str_(r.tipo), str_(r.fecha), str_(r.operador), JSON.stringify(r)]]);
+    escribir_(sh, o._row, 4, [[str_(r.nombre), str_(r.estilo), str_(r.tipo), str_(r.fecha), str_(r.operador), JSON.stringify(r)]]);
     return { ok: true };
   });
 }
@@ -175,8 +193,8 @@ function loteEstado_(d) {
     var sh = hoja_('Lotes', LOTES_COLS);
     var o = buscarLote_(sh, d.id);
     if (!o) return { ok: false, error: 'lote no existe' };
-    sh.getRange(o._row, 3).setValue(d.estado);
-    if (d.estado === 'CERRADO') sh.getRange(o._row, 11).setValue(now_());
+    escribir_(sh, o._row, 3, [[d.estado]]);
+    if (d.estado === 'CERRADO') escribir_(sh, o._row, 11, [[now_()]]);
     return { ok: true };
   });
 }
@@ -208,9 +226,9 @@ function pasoLote_(d) {
       uids[uid] = 1;
       filas.push([uid, str_(d.id), str_(ev.paso), str_(ev.ts || recibido), ev.hecho ? 1 : 0, str_(ev.operador), JSON.stringify(ev.valores || {}), str_(ev.nota), recibido]);
     }
-    if (filas.length) shR.getRange(shR.getLastRow() + 1, 1, filas.length, REG_COLS.length).setValues(filas);
+    if (filas.length) escribir_(shR, shR.getLastRow() + 1, 1, filas);
     // marcar inicio del lote con el primer registro
-    if (filas.length && !str_(o.inicio)) shL.getRange(o._row, 10).setValue(recibido);
+    if (filas.length && !str_(o.inicio)) escribir_(shL, o._row, 10, [[recibido]]);
     return { ok: true, aplicados: filas.length, dups: dups, rechazados: rech };
   });
 }
