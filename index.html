@@ -83,6 +83,7 @@ main{max-width:860px;margin:0 auto;padding:12px 12px 90px}
 .resumen span{font-weight:700;font-size:16px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw}
 .toast.bad{background:var(--bad)}
+.ia{background:#fff6d6!important;border-color:#e0b93a!important}
 .hidden{display:none!important}
 .foot{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;justify-content:center;z-index:15}
 .foot .btn{flex:1;max-width:280px}
@@ -111,7 +112,7 @@ main{max-width:860px;margin:0 auto;padding:12px 12px 90px}
   <section id="vNuevo" class="hidden">
     <div class="card">
       <h2 style="margin:0 0 10px;font-size:17px" id="nuevoTit">Nuevo lote</h2>
-      <div class="row" style="margin-bottom:12px"><label class="btn sec sm" for="docxInput">Importar receta (.docx)</label><input id="docxInput" type="file" accept=".docx" style="display:none" onchange="importarDocx(this)"><span class="mut" id="importInfo"></span></div>
+      <div class="row" style="margin-bottom:12px"><label class="btn sec sm" for="docxInput">Importar receta (.docx)</label><input id="docxInput" type="file" accept=".docx" style="display:none" onchange="importarDocx(this)"><button class="btn sec sm hidden" id="btnIA" onclick="completarIA()">Completar con IA</button><span class="mut" id="importInfo"></span></div>
       <div class="form" id="formReceta"></div>
       <div class="row" style="margin-top:14px">
         <button class="btn" onclick="guardarLote()">Guardar lote</button>
@@ -319,7 +320,7 @@ var RECETA_CAMPOS = [
   { k:'notas', l:'Notas', t:'area' }
 ];
 // ===== APP =====
-var APP_VERSION = 'F3';
+var APP_VERSION = 'F4';
 var API_URL = 'https://script.google.com/macros/s/AKfycbwplaw64-4SfAZmEcrMEDcY7a_1vRzItvPx_xEOJgtTJgfNNRByVsK_plwg5R-D-x4b/exec';
 var LS = { op:'coc_operador', lotes:'coc_lotes', lote:'coc_lote_', cola:'coc_cola', ui:'coc_ui' };
 var estado = { vista:'lista', loteId:null, lote:null, registros:[], editandoId:null, online:navigator.onLine, sync:false, abiertas:{} };
@@ -348,6 +349,10 @@ function api(fn,datos){
   return fetch(url,{method:'GET',redirect:'follow',cache:'no-store',signal:ctrl?ctrl.signal:undefined}).then(function(r){return r.json();}).then(function(j){ if(to) clearTimeout(to); if(!j||j.ok!==true) throw new Error(j&&j.error||'respuesta inválida'); return j; }).catch(function(e){ if(to) clearTimeout(to); throw e; });
 }
 
+function apiPost(fn,datos,ms){ // POST text/plain (sin preflight) para payloads grandes; Apps Script redirige y fetch sigue
+  var ctrl=('AbortController' in window)?new AbortController():null; var to=ctrl?setTimeout(function(){ctrl.abort();},ms||90000):null;
+  return fetch(API_URL,{method:'POST',redirect:'follow',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({api:fn,datos:datos||{}}),signal:ctrl?ctrl.signal:undefined}).then(function(r){return r.json();}).then(function(j){ if(to) clearTimeout(to); if(!j||j.ok!==true) throw new Error(j&&j.error||'respuesta inválida'); return j; }).catch(function(e){ if(to) clearTimeout(to); throw e; });
+}
 // ---------- operador ----------
 function operador(){ return lsGet(LS.op,''); }
 function pedirOperador(forzar){ var cur=operador(); if(cur&&!forzar){ $('opNombre').textContent=cur; return cur; } var n=null; try{ n=prompt('Nombre del operador:',cur||''); }catch(e){ n=null; $('opForm').classList.remove('hidden'); $('opInput').value=cur||''; if(estado.vista!=='lista') mostrar('lista'); } if(n&&n.trim()){ lsSet(LS.op,n.trim()); } $('opNombre').textContent=operador()||'—'; return operador(); }
@@ -618,14 +623,28 @@ function recetaDesdeBloques(bl,nombreArchivo){
   r.notas=notas.join(' · ');
   return {receta:r,faltan:faltan};
 }
+var importEstado={texto:'',nDoc:0,faltan:[]};
+function bloquesATexto(bl){ return bl.map(function(b){ return b.t==='p'?b.txt:b.rows.map(function(x){return x.join(' | ');}).join('\n'); }).join('\n'); }
+function marcarIA(k){ var el=$('rc_'+k); if(!el) return; el.classList.add('ia'); el.title='Valor propuesto por IA: revisar'; el.addEventListener('input',function(){ el.classList.remove('ia'); el.title=''; },{once:true}); }
+function infoImport(nIA){ var etiquetas=RECETA_CAMPOS.filter(function(c){return importEstado.faltan.indexOf(c.k)>=0;}).map(function(c){return c.l;}); $('importInfo').textContent=importEstado.nDoc+' campos del documento'+(nIA?' · '+nIA+' por IA (amarillo: revisar)':'')+(etiquetas.length?' · sin dato: '+etiquetas.join(', '):''); }
 function importarDocx(input){
   var f=input.files&&input.files[0]; if(!f) return; if(typeof JSZip==='undefined'){ toast('Importador no disponible sin conexión',true); return; }
-  $('importInfo').textContent='Leyendo…';
+  $('importInfo').textContent='Leyendo…'; $('btnIA').classList.add('hidden');
   f.arrayBuffer().then(docxBloques).then(function(bl){ var res=recetaDesdeBloques(bl,f.name); var actual=leerForm().receta; var r={}; for(var k in actual) r[k]=actual[k]; for(var k2 in res.receta) r[k2]=res.receta[k2]; if(!r.fecha) r.fecha=new Date().toISOString().slice(0,10); if(!r.operador) r.operador=operador(); renderForm(r);
-    var n=Object.keys(res.receta).length; var etiquetas=RECETA_CAMPOS.filter(function(c){return res.faltan.indexOf(c.k)>=0;}).map(function(c){return c.l;});
-    $('importInfo').textContent=n+' campos importados'+(etiquetas.length?' · sin dato: '+etiquetas.join(', '):''); toast('Receta importada: revisá y guardá'); window.scrollTo(0,0); })
+    importEstado={texto:bloquesATexto(bl),nDoc:Object.keys(res.receta).length,faltan:res.faltan}; infoImport(0); $('btnIA').classList.remove('hidden'); window.scrollTo(0,0);
+    var faltaReq=RECETA_CAMPOS.some(function(c){ return c.req&&c.k!=='fecha'&&c.k!=='operador'&&res.faltan.indexOf(c.k)>=0; });
+    if((faltaReq||importEstado.nDoc<12)&&estado.online){ completarIA(); } else toast('Receta importada: revisá y guardá'); })
   .catch(function(e){ $('importInfo').textContent=''; toast('No se pudo leer el archivo: '+e.message,true); })
   .then(function(){ input.value=''; });
+}
+function completarIA(){
+  if(!importEstado.texto){ toast('Primero importá un .docx',true); return; }
+  if(!estado.online){ toast('Sin conexión: la IA necesita internet',true); return; }
+  var b=$('btnIA'); b.disabled=true; b.textContent='Consultando IA…'; $('importInfo').textContent='Consultando IA (10–20 s)…';
+  apiPost('recetaIA',{texto:importEstado.texto}).then(function(j){ var r=j.receta||{}; var nIA=0; var vacios=[]; RECETA_CAMPOS.forEach(function(c){ var el=$('rc_'+c.k); if(!el) return; var v=r[c.k]; if(v==null||v==='') return; if(el.value.trim()!=='') return; el.value=v; marcarIA(c.k); nIA++; }); importEstado.faltan=RECETA_CAMPOS.filter(function(c){ var el=$('rc_'+c.k); return el&&el.value.trim()===''&&c.k!=='notas'&&c.k!=='fv'&&c.k!=='t_clt'&&c.k!=='molienda'&&c.k!=='o2'; }).map(function(c){return c.k;});
+    infoImport(nIA); toast(nIA?nIA+' campos completados por IA: revisá los amarillos':'La IA no agregó datos nuevos'); })
+  .catch(function(e){ infoImport(0); toast('IA: '+e.message,true); })
+  .then(function(){ b.disabled=false; b.textContent='Completar con IA'; });
 }
 </script>
 </body>

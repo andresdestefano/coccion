@@ -1,6 +1,6 @@
 /**
  * CoccionApp.gs — Backend de la App de Cocción Hammurabier
- * Versión B2 · 2026-09-03 — B2: columnas en formato texto (@) para que Sheets no convierta pasos/fechas en Date; lectura normaliza Date→string.
+ * Versión B3 · 2026-09-04 — B3: api `recetaIA` (Gemini) para completar la receta desde texto libre. B2: columnas en formato texto (@) para que Sheets no convierta pasos/fechas en Date; lectura normaliza Date→string.
  *
  * Hoja: "Cocciones Hammurabier" con pestañas Lotes y Registros.
  * API (GET o POST): ?api=<funcion>&datos=<json urlencoded>
@@ -14,13 +14,14 @@
  *   pasoLote      {id, eventos:[{...}]}              → varios eventos en una llamada (cola offline)
  *   setup                                            → crea hoja/pestañas si faltan (solo dueño)
  *   ping                                             → {ok:true, version}
+ *   recetaIA      {texto}                            → {ok, receta:{...}} vía Gemini (GEMINI_API_KEY en Script Properties)
  *
  * Toda escritura bajo LockService. Registros es append-only: el estado actual de un paso
  * es su ÚLTIMO evento. Deshacer = evento con hecho=0.
  */
 
 var SHEET_ID = ''; // vacío = script vinculado a la hoja (SpreadsheetApp.getActive)
-var VERSION = 'B2';
+var VERSION = 'B3';
 var LOTES_COLS = ['id','creado','estado','nombre','estilo','tipo','fecha','operador','receta','inicio','fin'];
 var REG_COLS = ['uid','id_lote','paso','ts','hecho','operador','valores','nota','recibido'];
 
@@ -46,6 +47,7 @@ function api_(e) {
       case 'pasoRegistrar': out = pasoLote_({ id: d.id, eventos: [d] }); break;
       case 'pasoLote':      out = pasoLote_(d); break;
       case 'setup':         out = setup_(); break;
+      case 'recetaIA':      out = recetaIA_(d); break;
       default:              out = { ok: false, error: 'api no reconocida: ' + api };
     }
   } catch (err) {
@@ -231,4 +233,66 @@ function pasoLote_(d) {
     if (filas.length && !str_(o.inicio)) escribir_(shL, o._row, 10, [[recibido]]);
     return { ok: true, aplicados: filas.length, dups: dups, rechazados: rech };
   });
+}
+
+// ---------- receta por IA (Gemini) ----------
+var RECETA_IA_CAMPOS = [
+  ['estilo', 'string', 'nombre de la cerveza / estilo (ej. "Lalemana Helles Lager")'],
+  ['tipo', 'string', '"ale" o "lager" según la levadura o el estilo'],
+  ['vol_adh', 'number', 'volumen post-hervor / al fermentador en litros (NO el pre-hervor)'],
+  ['og', 'number', 'gravedad original objetivo en °Plato'],
+  ['vol_pre', 'number', 'volumen de recolección pre-hervor en litros'],
+  ['grist', 'string', 'maltas con kg, separadas por "; ", y total entre paréntesis'],
+  ['molienda', 'string', 'separación de rodillos / ajuste de molino si se indica'],
+  ['agua_mash', 'number', 'agua de maceración en litros'],
+  ['agua_total', 'number', 'agua tratada en HLT en litros = maceración + sparge + precalentamiento; NO incluir enjuague pre-cocina'],
+  ['t_mash', 'number', 'temperatura de maceración en °C'],
+  ['t_mac', 'number', 'tiempo de sacarificación/maceración en minutos (sin vorlauf)'],
+  ['ph_mash', 'number', 'pH objetivo de maceración medido a 20 °C'],
+  ['sales', 'string', 'sales al agua con cantidad, separadas por "; " (ej. "CaSO4·2H2O 40 g; CaCl2·2H2O 260 g")'],
+  ['ascorbico', 'string', 'ácido ascórbico con cantidad (ej. "100 g")'],
+  ['fosforico_mash', 'string', 'ácido fosfórico para la fracción de maceración, con cantidad en mL'],
+  ['fosforico_sparge', 'string', 'ácido fosfórico para la fracción de sparge, con cantidad en mL'],
+  ['t_hervor', 'number', 'duración del hervor en minutos'],
+  ['adiciones', 'string', 'adiciones del hervor, una por línea, formato "faltan N min: producto — cantidad" (N = minutos que faltan para el fin del hervor; flameout = 0)'],
+  ['t_ferm', 'number', 'temperatura de knock out / inicio de fermentación en °C'],
+  ['t_clt', 'number', 'temperatura del CLT (agua de enfriamiento) en °C si se indica'],
+  ['levadura', 'string', 'cepa y cantidad de levadura'],
+  ['adiciones_fv', 'string', 'otras adiciones al fermentador (nutrientes, enzimas) con cantidad, separadas por "; "'],
+  ['o2', 'string', '"Sí" o "No" si el documento dice si se oxigena; vacío si no lo dice'],
+  ['fv', 'string', 'fermentador asignado (ej. "FV3") si se indica'],
+  ['notas', 'string', 'datos operativos útiles sin campo propio: temperatura y pH de sparge, criterios de corte de lauterado, set del HLT, whirlpool, desviaciones registradas. Máximo 400 caracteres']
+];
+function recetaIA_(d) {
+  var texto = str_(d && d.texto).trim();
+  if (!texto) throw new Error('texto faltante');
+  if (texto.length > 60000) texto = texto.slice(0, 60000);
+  var props = PropertiesService.getScriptProperties();
+  var key = props.getProperty('GEMINI_API_KEY');
+  if (!key) return { ok: false, error: 'falta GEMINI_API_KEY en Propiedades del script' };
+  var modelo = props.getProperty('GEMINI_MODEL') || 'gemini-2.5-flash';
+  var schemaProps = {}, desc = [];
+  RECETA_IA_CAMPOS.forEach(function (c) { schemaProps[c[0]] = { type: c[1] === 'number' ? 'number' : 'string', nullable: true }; desc.push('- ' + c[0] + ' (' + c[1] + '): ' + c[2]); });
+  var prompt = 'Sos el asistente técnico de una cervecería. Del siguiente documento de receta extraé los datos para la ficha de cocción. Reglas: usá exactamente las unidades pedidas (litros, °C, minutos, °Plato, pH a 20 °C); si un dato no está en el documento devolvé null, NUNCA lo inventes ni lo calcules salvo agua_total (suma de fracciones del HLT); no confundas volumen pre-hervor con post-hervor; respondé solo el JSON.\n\nCampos:\n' + desc.join('\n') + '\n\nDOCUMENTO:\n' + texto;
+  var payload = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: { type: 'object', properties: schemaProps } }
+  };
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent';
+  var resp = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': key }, payload: JSON.stringify(payload), muteHttpExceptions: true });
+  var code = resp.getResponseCode(); var body = resp.getContentText();
+  if (code !== 200) return { ok: false, error: 'Gemini HTTP ' + code + ': ' + body.slice(0, 300) };
+  var j = json_(body, {});
+  var txt = ''; try { txt = j.candidates[0].content.parts.map(function (p) { return p.text || ''; }).join(''); } catch (e) { txt = ''; }
+  var r = json_(txt.replace(/^```json\s*|```\s*$/g, ''), null);
+  if (!r || typeof r !== 'object') return { ok: false, error: 'respuesta de Gemini no es JSON: ' + txt.slice(0, 200) };
+  var out = {};
+  RECETA_IA_CAMPOS.forEach(function (c) {
+    var v = r[c[0]]; if (v === null || v === undefined || v === '') return;
+    if (c[1] === 'number') { var n = typeof v === 'number' ? v : parseFloat(String(v).replace(/(\d),(?=\d{3}\b)/g, '$1').replace(',', '.')); if (isNaN(n)) return; out[c[0]] = n; }
+    else { out[c[0]] = String(v).trim(); }
+  });
+  if (out.tipo) out.tipo = /lager/i.test(out.tipo) ? 'lager' : 'ale';
+  if (out.o2) out.o2 = /^s/i.test(out.o2) ? 'Sí' : 'No';
+  return { ok: true, receta: out, modelo: modelo, usage: j.usageMetadata || null };
 }
