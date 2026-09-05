@@ -74,7 +74,15 @@ main{max-width:860px;margin:0 auto;padding:12px 12px 90px}
 .paso .acc{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
 .paso .meta{font-size:13px;color:var(--ok);font-weight:600}
 .paso .meta.pend{color:var(--warn)}
-.paso .nota{margin-top:8px}
+.btn.ico{width:46px;height:46px;padding:0;font-size:22px;line-height:46px;text-align:center;border-radius:12px}
+.btn.omitb{background:#fff;color:var(--bad);border:1px solid var(--bad)}
+.btn.undo{background:#fff;color:var(--mut);border:1px solid var(--line);width:38px;height:38px;font-size:18px;line-height:38px}
+.paso.omit{background:#fbf5f4}
+.paso.omit .txt{text-decoration:line-through;color:var(--mut)}
+.paso .meta.omit{color:var(--bad)}
+.secnota{padding:10px 14px;border-top:1px solid var(--line);background:#f8fafc}
+.secnota label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px;font-weight:600}
+.secnota textarea{min-height:48px}
 .paso .vals{margin-top:6px;font-size:14px;color:#2e3a45}
 .paso .vals b{font-weight:600}
 .resumen{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
@@ -320,7 +328,7 @@ var RECETA_CAMPOS = [
   { k:'notas', l:'Notas', t:'area' }
 ];
 // ===== APP =====
-var APP_VERSION = 'F4';
+var APP_VERSION = 'F5';
 var API_URL = 'https://script.google.com/macros/s/AKfycbwplaw64-4SfAZmEcrMEDcY7a_1vRzItvPx_xEOJgtTJgfNNRByVsK_plwg5R-D-x4b/exec';
 var LS = { op:'coc_operador', lotes:'coc_lotes', lote:'coc_lote_', cola:'coc_cola', ui:'coc_ui' };
 var estado = { vista:'lista', loteId:null, lote:null, registros:[], editandoId:null, online:navigator.onLine, sync:false, abiertas:{} };
@@ -391,6 +399,8 @@ function registrosEfectivos(id){ // servidor + cola local (la cola gana por ser 
   var loc=loteLocal(id); var regs=(loc&&loc.registros||[]).slice(); var c=colaGet()[id]; if(c&&c.eventos) regs=regs.concat(c.eventos.map(function(e){ var o={}; for(var k in e) o[k]=e[k]; o._pend=1; return o; })); return regs;
 }
 function estadoPasos(regs){ var m={}; regs.forEach(function(r){ var cur=m[r.paso]; if(!cur||r.ts>=cur.ts) m[r.paso]=r; }); return m; }
+function omitido(st){ return !!(st&&!st.hecho&&st.valores&&st.valores._omitido); }
+function resuelto(st){ return !!(st&&(st.hecho||omitido(st))); }
 
 function refrescar(mostrar){ // trae del servidor lo que corresponde a la vista actual
   if(!estado.online) return Promise.resolve();
@@ -459,18 +469,20 @@ function hint(tpl,d){ return tpl.replace(/\{\{(\w+)\}\}/g,function(_,k){ return 
 function renderLote(inicial){
   var lote=estado.lote; if(!lote) return;
   var regs=registrosEfectivos(lote.id); var pasos=estadoPasos(regs); var d=derivados(lote,pasos);
-  var hechos=PASOS.filter(function(p){return pasos[p.id]&&pasos[p.id].hecho;}).length;
+  var hechos=PASOS.filter(function(p){return resuelto(pasos[p.id]);}).length;
   $('titulo').textContent=lote.nombre;
   $('loteCab').innerHTML='<div class="row"><div class="grow"><div style="font-size:18px;font-weight:700">'+esc(lote.nombre)+'</div><div class="mut">'+esc(lote.estilo)+' · '+esc(lote.tipo)+' · '+fechaCorta(lote.fecha)+' · '+esc(d.vol_adh)+' L ADH · FV '+esc(d.fv)+'</div></div><span class="tag '+(lote.estado==='ABIERTO'?'ab':'ce')+'">'+esc(lote.estado)+'</span></div><div class="prog"><i style="width:'+Math.round(100*hechos/PASOS.length)+'%"></i></div><div class="mut" style="margin-top:4px">'+hechos+' / '+PASOS.length+' pasos</div>';
   renderResumen(pasos,d);
   var abierto=lote.estado==='ABIERTO';
   // sección abierta por defecto: la primera con pasos pendientes
-  if(inicial){ estado.abiertas={}; var first=null; for(var i=0;i<PASOS.length;i++){ if(!(pasos[PASOS[i].id]&&pasos[PASOS[i].id].hecho)){ first=PASOS[i].s; break; } } if(first) estado.abiertas[first]=1; }
+  if(inicial){ estado.abiertas={}; var first=null; for(var i=0;i<PASOS.length;i++){ if(!resuelto(pasos[PASOS[i].id])){ first=PASOS[i].s; break; } } if(first) estado.abiertas[first]=1; }
   var h='';
   SECCIONES.forEach(function(s){
-    var ps=PASOS.filter(function(p){return p.s===s.id;}); var n=ps.filter(function(p){return pasos[p.id]&&pasos[p.id].hecho;}).length;
+    var ps=PASOS.filter(function(p){return p.s===s.id;}); var n=ps.filter(function(p){return resuelto(pasos[p.id]);}).length; var sn=pasos['sec:'+s.id]; var notaSec=sn&&sn.hecho?sn.nota:'';
     h+='<div class="sec'+(estado.abiertas[s.id]?' open':'')+(n===ps.length?' done':'')+'" id="sec_'+s.id.replace(/\./g,'_')+'"><h2 onclick="toggleSec(\''+s.id+'\')"><span class="chev">›</span>'+esc(s.n)+'<span class="cnt">'+n+'/'+ps.length+'</span></h2><div class="body">';
     ps.forEach(function(p){ h+=renderPaso(p,pasos[p.id],d,abierto); });
+    if(abierto) h+='<div class="secnota"><label for="sn_'+pid(s.id)+'">Nota de la sección</label><textarea id="sn_'+pid(s.id)+'" placeholder="Observaciones de '+esc(s.n)+'" onblur="guardarNotaSeccion(\''+s.id+'\')">'+esc(notaSec)+'</textarea>'+(sn&&sn._pend?'<div class="mut">pendiente de enviar</div>':'')+'</div>';
+    else if(notaSec) h+='<div class="secnota"><b>Nota:</b> '+esc(notaSec)+'</div>';
     h+='</div></div>';
   });
   $('secciones').innerHTML=h; $('btnCerrar').classList.toggle('hidden',!abierto);
@@ -478,37 +490,40 @@ function renderLote(inicial){
 function toggleSec(id){ estado.abiertas[id]=!estado.abiertas[id]; var el=$('sec_'+id.replace(/\./g,'_')); if(el) el.classList.toggle('open',!!estado.abiertas[id]); }
 function pid(id){ return id.replace(/[^A-Za-z0-9]/g,'_'); }
 function renderPaso(p,st,d,abierto){
-  var done=!!(st&&st.hecho); var vals=st&&st.valores||{};
-  var h='<div class="paso'+(done?' done':'')+(p.k?' crit':'')+'" id="paso_'+pid(p.id)+'"><div class="top"><span class="id">'+esc(p.id)+'</span><div class="txt">'+esc(p.t);
+  var done=!!(st&&st.hecho); var omit=omitido(st); var vals=st&&st.valores||{};
+  var h='<div class="paso'+(done?' done':'')+(omit?' omit':'')+(p.k?' crit':'')+'" id="paso_'+pid(p.id)+'"><div class="top"><span class="id">'+esc(p.id)+'</span><div class="txt">'+esc(p.t);
   if(p.h) h+='<div class="h">'+esc(hint(p.h,d)).replace(/\n/g,'<br>')+'</div>';
   h+='</div></div>';
   if(p.c&&p.c.length){
     if(done){ var vs=p.c.filter(function(c){return vals[c.k]!==''&&vals[c.k]!=null;}).map(function(c){return '<b>'+esc(c.l)+':</b> '+esc(vals[c.k]);}); if(vs.length) h+='<div class="vals">'+vs.join(' · ')+'</div>'; }
-    else if(abierto){ h+='<div class="campos">'; p.c.forEach(function(c){ var v=vals[c.k]==null?'':vals[c.k]; var id='c_'+pid(p.id)+'_'+c.k; h+='<div><label for="'+id+'">'+esc(c.l)+'</label>';
+    else if(abierto&&!omit){ h+='<div class="campos">'; p.c.forEach(function(c){ var v=vals[c.k]==null?'':vals[c.k]; var id='c_'+pid(p.id)+'_'+c.k; h+='<div><label for="'+id+'">'+esc(c.l)+'</label>';
       if(c.t==='sel') h+='<select id="'+id+'"><option value="">—</option>'+c.op.map(function(o){return '<option'+(String(v)===o?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
       else if(c.t==='txt') h+='<input id="'+id+'" type="text" value="'+esc(v)+'">';
       else h+='<input id="'+id+'" type="number" step="'+(c.st||'any')+'" inputmode="decimal" value="'+esc(v)+'">';
       h+='</div>'; }); h+='</div>'; }
   }
   if(done&&st.nota) h+='<div class="vals"><b>Nota:</b> '+esc(st.nota)+'</div>';
-  if(!done&&abierto) h+='<div class="nota"><input id="n_'+pid(p.id)+'" type="text" placeholder="Nota (opcional)" value="'+esc(st&&st.nota||'')+'"></div>';
   h+='<div class="acc">';
-  if(done){ h+='<span class="meta'+(st._pend?' pend':'')+'">✓ '+hhmm(st.ts)+(st.operador?' · '+esc(st.operador):'')+(st._pend?' · pendiente de enviar':'')+'</span>'; if(abierto) h+='<button class="btn sm sec" onclick="reabrirPaso(\''+esc(p.id)+'\')">Editar</button>'; }
-  else if(abierto){ h+='<button class="btn ok" onclick="marcarPaso(\''+esc(p.id)+'\')">Hecho</button>'; if(st&&!st.hecho&&st.ts) h+='<span class="mut">deshecho '+hhmm(st.ts)+'</span>'; }
+  var pend=st&&st._pend?' · pendiente de enviar':'';
+  if(done){ h+='<span class="meta'+(st._pend?' pend':'')+'">✓ '+hhmm(st.ts)+(st.operador?' · '+esc(st.operador):'')+pend+'</span>'; if(abierto) h+='<button class="btn ico undo" title="Deshacer" onclick="reabrirPaso(\''+esc(p.id)+'\')">↺</button>'; }
+  else if(omit){ h+='<span class="meta omit">✗ omitido '+hhmm(st.ts)+(st.operador?' · '+esc(st.operador):'')+pend+'</span>'; if(abierto) h+='<button class="btn ico undo" title="Deshacer" onclick="reabrirPaso(\''+esc(p.id)+'\')">↺</button>'; }
+  else if(abierto){ h+='<button class="btn ok ico" title="Hecho" onclick="marcarPaso(\''+esc(p.id)+'\')">✓</button><button class="btn ico omitb" title="Omitir" onclick="omitirPaso(\''+esc(p.id)+'\')">✗</button>'; }
   h+='</div></div>'; return h;
 }
 function leerCampos(p){ var v={}; var faltan=[]; (p.c||[]).forEach(function(c){ var el=$('c_'+pid(p.id)+'_'+c.k); var x=el?el.value.trim():''; if(c.t==='num'&&x!==''){ var n=num(x); x=n==null?'':n; } v[c.k]=x; }); return v; }
 function marcarPaso(id){
   var p=PASOS.filter(function(x){return x.id===id;})[0]; if(!p) return; var op=operador()||pedirOperador(true); if(!op){ toast('Falta el operador',true); return; }
-  var vals=leerCampos(p); var nel=$('n_'+pid(id)); var nota=nel?nel.value.trim():'';
+  var vals=leerCampos(p); var nota='';
   if(p.id==='2.6.19'){ var y=estadoPasos(registrosEfectivos(estado.loteId))['2.6.18']; if(!(y&&y.hecho&&y.valores&&y.valores.yodo==='Pasa')){ if(!confirm('La prueba de yodo (2.6.18) no está registrada como "Pasa". ¿Avanzar igual?')) return; nota=(nota?nota+' ':'')+'[avanzó sin yodo Pasa]'; } }
   if(p.id==='2.9.5.3'){ var ini=estadoPasos(registrosEfectivos(estado.loteId))['2.9.5.1']; if(ini&&ini.hecho&&vals.min===''){ vals.min=minutosEntre(ini.ts,ahoraISO()); } }
   registrar(id,1,vals,nota,op);
 }
 function reabrirPaso(id){ var op=operador(); registrar(id,0,{},'',op); }
-function registrar(paso,hecho,valores,nota,op){
+function omitirPaso(id){ var p=PASOS.filter(function(x){return x.id===id;})[0]; if(!p) return; var op=operador()||pedirOperador(true); if(!op){ toast('Falta el operador',true); return; } if(p.k&&!confirm('Este paso es crítico. ¿Marcarlo como omitido?')) return; registrar(id,0,{_omitido:1},'',op,true); }
+function guardarNotaSeccion(sec){ var el=$('sn_'+pid(sec)); if(!el) return; var txt=el.value.trim(); var st=estadoPasos(registrosEfectivos(estado.loteId))['sec:'+sec]; var prev=st&&st.hecho?st.nota:''; if(txt===prev) return; var op=operador()||''; var ev={uid:uid_(),paso:'sec:'+sec,ts:ahoraISO(),hecho:txt?1:0,operador:op,valores:{},nota:txt}; encolar(estado.loteId,'evento',ev); sincronizar(false); }
+function registrar(paso,hecho,valores,nota,op,avanzar){
   var ev={uid:uid_(),paso:paso,ts:ahoraISO(),hecho:hecho?1:0,operador:op,valores:valores||{},nota:nota||''};
-  encolar(estado.loteId,'evento',ev); if(hecho){ var p=PASOS.filter(function(x){return x.id===paso;})[0]; var st=estadoPasos(registrosEfectivos(estado.loteId)); var ps=PASOS.filter(function(x){return x.s===p.s;}); if(ps.every(function(x){return st[x.id]&&st[x.id].hecho;})){ var i=SECCIONES.findIndex(function(s){return s.id===p.s;}); if(i>=0&&i+1<SECCIONES.length){ estado.abiertas[p.s]=false; estado.abiertas[SECCIONES[i+1].id]=true; } } } renderLote(false); var el=$('paso_'+pid(paso)); if(el&&hecho){ el.scrollIntoView({block:'nearest'}); }
+  encolar(estado.loteId,'evento',ev); if(hecho||avanzar){ var p=PASOS.filter(function(x){return x.id===paso;})[0]; var st=estadoPasos(registrosEfectivos(estado.loteId)); var ps=PASOS.filter(function(x){return x.s===p.s;}); if(ps.every(function(x){return resuelto(st[x.id]);})){ var i=SECCIONES.findIndex(function(s){return s.id===p.s;}); if(i>=0&&i+1<SECCIONES.length){ estado.abiertas[p.s]=false; estado.abiertas[SECCIONES[i+1].id]=true; } } } renderLote(false); var el=$('paso_'+pid(paso)); if(el&&hecho){ el.scrollIntoView({block:'nearest'}); }
   sincronizar(false);
 }
 
