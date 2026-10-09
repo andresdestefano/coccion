@@ -92,6 +92,19 @@ main{max-width:860px;margin:0 auto;padding:12px 12px 90px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw}
 .toast.bad{background:var(--bad)}
 .ia{background:#fff6d6!important;border-color:#e0b93a!important}
+.modal{position:fixed;inset:0;background:rgba(20,30,40,.55);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:640px){.modal{align-items:center}}
+.modal-card{background:#fff;width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:0 0 16px;box-shadow:0 -6px 30px rgba(0,0,0,.25)}
+@media(min-width:640px){.modal-card{border-radius:16px}}
+.modal-head{position:sticky;top:0;background:#fff;display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);z-index:1}
+.modal-head h2{margin:0;font-size:17px;flex:1}
+.rb{padding:10px 16px 4px}
+.rb h3{margin:8px 0 6px;font-size:13px;color:var(--pri2);text-transform:uppercase;letter-spacing:.04em}
+.rb .fila{display:flex;gap:12px;padding:6px 0;border-bottom:1px solid #eef1f4;font-size:15px}
+.rb .fila .k{color:var(--mut);min-width:42%;max-width:42%}
+.rb .fila .v{flex:1;font-weight:600;white-space:pre-wrap;word-break:break-word}
+.rb .fila .v ul{margin:0;padding-left:18px;font-weight:500}
+.rb .fila .v li{margin:2px 0}
 .hidden{display:none!important}
 .foot{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;justify-content:center;z-index:15}
 .foot .btn{flex:1;max-width:280px}
@@ -104,6 +117,8 @@ main{max-width:860px;margin:0 auto;padding:12px 12px 90px}
   <span id="estado">·</span>
   <button id="btnSync" onclick="sincronizar(true)" title="Sincronizar">↻</button>
 </header>
+<div id="modal" class="modal hidden" onclick="if(event.target===this)cerrarModal()"><div class="modal-card"><div class="modal-head"><h2 id="modalTit">Receta</h2><button class="btn sm" id="modalEditar" onclick="cerrarModal();editarReceta()">Editar</button><button class="btn sm sec" onclick="cerrarModal()">Cerrar</button></div><div id="modalBody"></div></div></div>
+<div id="opModal" class="modal hidden"><div class="modal-card" style="padding:16px"><h2 style="margin:0 0 6px;font-size:17px">¿Quién opera?</h2><p class="mut" style="margin:0 0 12px">El nombre queda guardado en este dispositivo y aparece en cada paso que marques.</p><input id="opInput" type="text" placeholder="Nombre del operador" autocomplete="name" enterkeyhint="done" onkeydown="if(event.key==='Enter')guardarOperador()"><div class="row" style="margin-top:12px"><button class="btn" onclick="guardarOperador()">Guardar</button><button class="btn sec" onclick="cerrarOperador()">Ahora no</button></div></div></div>
 <main>
   <!-- LISTA -->
   <section id="vLista">
@@ -111,7 +126,6 @@ main{max-width:860px;margin:0 auto;padding:12px 12px 90px}
       <div class="grow"><span class="mut">Operador:</span> <b id="opNombre">—</b> <button class="btn sm sec" onclick="pedirOperador(true)">cambiar</button></div>
       <button class="btn" onclick="irNuevo()">+ Nuevo lote</button>
     </div>
-    <div id="opForm" class="card hidden"><div class="row"><input id="opInput" class="grow" type="text" placeholder="Nombre del operador" style="width:auto"><button class="btn" onclick="guardarOperador()">Guardar</button></div></div>
     <div id="listaLotes"></div>
     <p class="mut hidden" id="listaVacia">Sin lotes. Creá el primero.</p>
     <p class="mut" style="font-size:12px;margin-top:20px">Procedimiento <span id="procVer"></span> · App <span id="appVer"></span></p>
@@ -328,7 +342,7 @@ var RECETA_CAMPOS = [
   { k:'notas', l:'Notas', t:'area' }
 ];
 // ===== APP =====
-var APP_VERSION = 'F5';
+var APP_VERSION = 'F6';
 var API_URL = 'https://script.google.com/macros/s/AKfycbwplaw64-4SfAZmEcrMEDcY7a_1vRzItvPx_xEOJgtTJgfNNRByVsK_plwg5R-D-x4b/exec';
 var LS = { op:'coc_operador', lotes:'coc_lotes', lote:'coc_lote_', cola:'coc_cola', ui:'coc_ui' };
 var estado = { vista:'lista', loteId:null, lote:null, registros:[], editandoId:null, online:navigator.onLine, sync:false, abiertas:{} };
@@ -363,8 +377,10 @@ function apiPost(fn,datos,ms){ // POST text/plain (sin preflight) para payloads 
 }
 // ---------- operador ----------
 function operador(){ return lsGet(LS.op,''); }
-function pedirOperador(forzar){ var cur=operador(); if(cur&&!forzar){ $('opNombre').textContent=cur; return cur; } var n=null; try{ n=prompt('Nombre del operador:',cur||''); }catch(e){ n=null; $('opForm').classList.remove('hidden'); $('opInput').value=cur||''; if(estado.vista!=='lista') mostrar('lista'); } if(n&&n.trim()){ lsSet(LS.op,n.trim()); } $('opNombre').textContent=operador()||'—'; return operador(); }
-function guardarOperador(){ var v=$('opInput').value.trim(); if(!v){ toast('Escribí el nombre',true); return; } lsSet(LS.op,v); $('opForm').classList.add('hidden'); $('opNombre').textContent=v; }
+var opPendiente=null;
+function pedirOperador(forzar,luego){ var cur=operador(); $('opNombre').textContent=cur||'—'; if(!forzar) return cur; opPendiente=luego||null; $('opInput').value=cur||''; $('opModal').classList.remove('hidden'); setTimeout(function(){ try{ $('opInput').focus(); }catch(e){} },60); return cur; }
+function guardarOperador(){ var v=$('opInput').value.trim(); if(!v){ toast('Escribí el nombre',true); return; } lsSet(LS.op,v); $('opModal').classList.add('hidden'); $('opNombre').textContent=v; var f=opPendiente; opPendiente=null; if(f) f(); }
+function cerrarOperador(){ $('opModal').classList.add('hidden'); opPendiente=null; }
 
 // ---------- cola offline ----------
 function colaGet(){ return lsGet(LS.cola,{}); }
@@ -445,7 +461,25 @@ function guardarLote(){
   guardarLoteLocal(nid,lote,[]); encolar(nid,'crear',r); toast('Lote creado'); abrirLote(nid); sincronizar(false);
 }
 function editarReceta(){ if(!estado.lote) return; if(estado.lote.estado!=='ABIERTO'){ toast('Lote cerrado: no se edita',true); return; } estado.editandoId=estado.loteId; $('nuevoTit').textContent='Editar receta — '+estado.lote.nombre; renderForm(estado.lote.receta); mostrar('nuevo'); $('titulo').textContent='Editar receta'; }
-function verReceta(){ if(!estado.lote) return; var r=estado.lote.receta||{}; var t=RECETA_CAMPOS.filter(function(f){return r[f.k]!==''&&r[f.k]!=null;}).map(function(f){return f.l+': '+r[f.k];}).join('\n'); alert(t||'Sin receta'); }
+var RECETA_BLOQUES=[
+  ['Lote',['nombre','estilo','tipo','fecha','operador','fv','vol_adh','og','vol_pre']],
+  ['Grist y molienda',['grist','molienda']],
+  ['Agua',['agua_mash','agua_total','sales','ascorbico','fosforico_mash','fosforico_sparge']],
+  ['Maceración',['t_mash','t_mac','ph_mash']],
+  ['Hervor',['t_hervor','adiciones']],
+  ['Fermentación',['t_ferm','t_clt','levadura','adiciones_fv','o2']],
+  ['Notas',['notas']]
+];
+var RECETA_UNIDADES={vol_adh:' L',og:' °P',vol_pre:' L',agua_mash:' L',agua_total:' L',t_mash:' °C',t_mac:' min',ph_mash:' @20 °C',t_hervor:' min',t_ferm:' °C',t_clt:' °C'};
+function valorReceta(k,v){ var s=String(v); if(k==='fecha') return fechaCorta(s); if(k==='adiciones'||k==='grist'||k==='sales'||k==='adiciones_fv'){ var items=s.split(/\n|;\s*/).map(function(x){return x.trim();}).filter(Boolean); if(items.length>1) return '<ul>'+items.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>'; } return esc(s)+(RECETA_UNIDADES[k]||''); }
+function verReceta(){
+  if(!estado.lote) return; var r=estado.lote.receta||{}; var lab={}; RECETA_CAMPOS.forEach(function(f){lab[f.k]=f.l;});
+  var h=''; function et(k){ return (lab[k]||k).replace(/\s*\([^)]*\)\s*$/,'').replace(/\s*@20 °C$/,'').replace(/\s*\(maltas y kg\)/,''); }
+  RECETA_BLOQUES.forEach(function(b){ var filas=b[1].filter(function(k){return r[k]!==''&&r[k]!=null;}); if(!filas.length) return; h+='<div class="rb"><h3>'+esc(b[0])+'</h3>'+filas.map(function(k){ return '<div class="fila"><span class="k">'+esc(et(k))+'</span><span class="v">'+valorReceta(k,r[k])+'</span></div>'; }).join('')+'</div>'; });
+  if(r.agua_total!=null&&r.agua_total!==''){ var d=derivados(estado.lote,{}); h+='<div class="rb"><h3>Calculado</h3><div class="fila"><span class="k">Agua a cargar en HLT (+600 L enjuague)</span><span class="v">'+esc(d.agua_hlt)+' L</span></div><div class="fila"><span class="k">Set HLT para mash-in (+6 °C)</span><span class="v">'+esc(d.t_hlt_set)+' °C</span></div><div class="fila"><span class="k">Agua de vertido (mash − 100 L fundación)</span><span class="v">'+esc(d.agua_vertido)+' L</span></div><div class="fila"><span class="k">CLT</span><span class="v">'+esc(d.t_clt)+' °C · '+esc(d.vol_clt)+' L</span></div></div>'; }
+  $('modalTit').textContent=r.nombre||'Receta'; $('modalBody').innerHTML=h||'<div class="rb mut">Sin receta cargada.</div>'; $('modalEditar').classList.toggle('hidden',estado.lote.estado!=='ABIERTO'); $('modal').classList.remove('hidden'); document.body.style.overflow='hidden';
+}
+function cerrarModal(){ $('modal').classList.add('hidden'); document.body.style.overflow=''; }
 function cerrarLote(){ if(!estado.lote) return; if(estado.lote.estado!=='ABIERTO'){ toast('Ya está cerrado'); return; } if(colaGet()[estado.loteId]&&(colaGet()[estado.loteId].eventos||[]).length){ toast('Hay registros pendientes de sincronizar. Sincronizá antes de cerrar.',true); return; } if(!confirm('¿Cerrar el lote '+estado.lote.nombre+'? No se podrán registrar más pasos.')) return; var loc=loteLocal(estado.loteId); loc.lote.estado='CERRADO'; loc.lote.fin=ahoraISO(); guardarLoteLocal(estado.loteId,loc.lote,loc.registros); estado.lote=loc.lote; encolar(estado.loteId,'estado','CERRADO'); renderLote(false); sincronizar(false); }
 
 // ---------- derivados de receta ----------
@@ -512,14 +546,14 @@ function renderPaso(p,st,d,abierto){
 }
 function leerCampos(p){ var v={}; var faltan=[]; (p.c||[]).forEach(function(c){ var el=$('c_'+pid(p.id)+'_'+c.k); var x=el?el.value.trim():''; if(c.t==='num'&&x!==''){ var n=num(x); x=n==null?'':n; } v[c.k]=x; }); return v; }
 function marcarPaso(id){
-  var p=PASOS.filter(function(x){return x.id===id;})[0]; if(!p) return; var op=operador()||pedirOperador(true); if(!op){ toast('Falta el operador',true); return; }
+  var p=PASOS.filter(function(x){return x.id===id;})[0]; if(p&&!operador()){ pedirOperador(true,function(){ marcarPaso(id); }); return; } if(!p) return; var op=operador();
   var vals=leerCampos(p); var nota='';
   if(p.id==='2.6.19'){ var y=estadoPasos(registrosEfectivos(estado.loteId))['2.6.18']; if(!(y&&y.hecho&&y.valores&&y.valores.yodo==='Pasa')){ if(!confirm('La prueba de yodo (2.6.18) no está registrada como "Pasa". ¿Avanzar igual?')) return; nota=(nota?nota+' ':'')+'[avanzó sin yodo Pasa]'; } }
   if(p.id==='2.9.5.3'){ var ini=estadoPasos(registrosEfectivos(estado.loteId))['2.9.5.1']; if(ini&&ini.hecho&&vals.min===''){ vals.min=minutosEntre(ini.ts,ahoraISO()); } }
   registrar(id,1,vals,nota,op);
 }
 function reabrirPaso(id){ var op=operador(); registrar(id,0,{},'',op); }
-function omitirPaso(id){ var p=PASOS.filter(function(x){return x.id===id;})[0]; if(!p) return; var op=operador()||pedirOperador(true); if(!op){ toast('Falta el operador',true); return; } if(p.k&&!confirm('Este paso es crítico. ¿Marcarlo como omitido?')) return; registrar(id,0,{_omitido:1},'',op,true); }
+function omitirPaso(id){ var p=PASOS.filter(function(x){return x.id===id;})[0]; if(!p) return; if(!operador()){ pedirOperador(true,function(){ omitirPaso(id); }); return; } var op=operador(); if(p.k&&!confirm('Este paso es crítico. ¿Marcarlo como omitido?')) return; registrar(id,0,{_omitido:1},'',op,true); }
 function guardarNotaSeccion(sec){ var el=$('sn_'+pid(sec)); if(!el) return; var txt=el.value.trim(); var st=estadoPasos(registrosEfectivos(estado.loteId))['sec:'+sec]; var prev=st&&st.hecho?st.nota:''; if(txt===prev) return; var op=operador()||''; var ev={uid:uid_(),paso:'sec:'+sec,ts:ahoraISO(),hecho:txt?1:0,operador:op,valores:{},nota:txt}; encolar(estado.loteId,'evento',ev); sincronizar(false); }
 function registrar(paso,hecho,valores,nota,op,avanzar){
   var ev={uid:uid_(),paso:paso,ts:ahoraISO(),hecho:hecho?1:0,operador:op,valores:valores||{},nota:nota||''};
@@ -555,7 +589,6 @@ document.addEventListener('visibilitychange',function(){ if(!document.hidden) si
 (function init(){
   $('procVer').textContent=PROC_VERSION; $('appVer').textContent=APP_VERSION;
   pedirOperador(false); setEstado(); renderLista(); irLista();
-  if(!operador()) setTimeout(function(){ pedirOperador(true); },300);
   setInterval(function(){ if(colaTotal()) sincronizar(false); },60000);
 })();
 // ===== IMPORTADOR DE RECETA (.docx) =====
